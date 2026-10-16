@@ -1,0 +1,37 @@
+name: ci
+
+on:
+  push:
+    branches: [main, "rust-core", "v0.1-core"]
+  pull_request:
+
+jobs:
+  rust-core:
+    name: Rust core (cargo test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build & test hpm-core
+        run: cargo test -p hpm-core
+
+  python-bindings:
+    name: Python bindings (pytest + ruff)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install build deps
+        run: pip install maturin click pytest ruff
+      - name: Build & install the extension
+        run: maturin develop -m crates/hpm/Cargo.toml
+      - name: Unit tests
+        run: python -m pytest tests -q
+      - name: Lint
+        run: ruff check hpm tests

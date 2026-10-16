@@ -1,0 +1,89 @@
+name: publish-python
+
+# Publishes the `hpm` Python bindings to PyPI.
+#
+# Pip / uv / uvx install from PyPI: `pip install harness-package-manager`.
+#
+# Setup (once, in the repo Settings > Secrets and variables > Actions):
+#   - Trusted publishing (recommended): create a PyPI "publisher" mapping to this
+#     GitHub repo + environment `pypi`; no token needed.
+#   - Or set `PYPI_TOKEN` (a PyPI-scoped token) and the workflow falls back to it.
+#   - For test PyPI publishes, set `TEST_PYPI_TOKEN` and run with `--pypi test`.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      pypi:
+        description: "Which index to publish to"
+        type: choice
+        default: main
+        options: [main, test]
+
+env:
+  PYPI_TARGET: ${{ github.event.inputs.pypi || 'main' }}
+
+permissions:
+  contents: read
+  # For trusted publishing (`pypa/gh-action-pypi-publish`). Only used when
+  # publishing with OIDC to the `pypi` environment.
+  id-token: write
+
+jobs:
+  build:
+    name: Build wheel / sdist (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, macos-14-xlarge, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Build wheels (abi3, CPython ≥ 3.9)
+        uses: PyO3/maturin-action@v1
+        with:
+          manifest-path: crates/hpm/Cargo.toml
+          args: --release --out dist
+          # hpm-core is a workspace member; build only the bindings crate.
+          manylinux: auto
+      - name: Build source dist (Linux only)
+        if: runner.os == 'Linux'
+        run: maturin sdist --manifest-path crates/hpm/Cargo.toml -o dist
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}
+          path: dist
+
+  # Upload wheels produced on Linux (manylinux covers x86_64 + aarch64).
+  # Edit this step if you add more platforms and want them all published.
+  publish:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Download all wheels
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish (main PyPI)
+        if: env.PYPI_TARGET == 'main'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist
+          # Trusted publishing via OIDC (requires the `pypi` environment be
+          # registered as a PyPI publisher). No token is needed or passed.
+      - name: Publish (test PyPI)
+        if: env.PYPI_TARGET == 'test'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist
+          repository-url: https://test.pypi.org/legacy/
+          password: ${{ secrets.TEST_PYPI_TOKEN }}

@@ -111,6 +111,25 @@ cargo test -p hpm-core            # Rust core + integration tests
 ruff check hpm/tests              # lint the Python layer
 ```
 
+## Release & publishing
+
+CI/CD publishes on git tags `v*` (and via `workflow_dispatch`):
+
+- **Python bindings** → PyPI as `harness-package-manager` (`.github/workflows/publish-python.yml`).
+  `maturin` builds an **abi3** wheel (CPython ≥ 3.9) for Linux/macOS/Windows and a source dist.
+  Publishing uses [trusted publishing](https://docs.pypi.org/trusted-publishers/) (OIDC) —
+  register this GitHub repo as a PyPI publisher for the `pypi` environment — or set a token.
+  For test-PyPI publishes, run the workflow with `--pypi test` and set `TEST_PYPI_TOKEN`.
+- **Rust crates** → crates.io as `hpm-core` then `hpm` (`.github/workflows/publish-cargo.yml`).
+  Set the `CARGO_REGISTRY_TOKEN` secret.
+
+Daily CI (`ci.yml`) runs `cargo test` for the core and `pytest` + `ruff` for the bindings on
+Python 3.9/3.12/3.13.
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0   # triggers both publishing workflows
+```
+
 ## Status
 
 Early v0.1 (Rust core): manifest + lockfile schema v1, content-addressed store,

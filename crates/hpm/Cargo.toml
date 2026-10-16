@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
+repository.workspace = true
 description = "Python bindings for harness-package-manager (hpm)."
 
 [lib]
@@ -11,7 +12,7 @@ name = "hpm"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-hpm-core = { path = "../hpm-core" }
+hpm-core = { path = "../hpm-core", version = "0.1.0" }
 pyo3 = { workspace = true }
 serde_json = { workspace = true }
 
