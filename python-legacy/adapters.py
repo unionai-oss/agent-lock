@@ -1,6 +1,6 @@
 """Harness adapters.
 
-An adapter teaches harness-package-manager how to configure, run, trace, and (later) enforce a
+An adapter teaches agent-lock how to configure, run, trace, and (later) enforce a
 specific harness. v0.1 ships the ``reference`` adapter, which acts as a baseline and
 test harness that works with the deterministic reference provider.
 
@@ -15,9 +15,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
-from hpm.providers import PROVIDERS
-from hpm.search import Stack
-from hpm.traces import Trace, TraceRecorder
+from al.providers import PROVIDERS
+from al.search import Stack
+from al.traces import Trace, TraceRecorder
 
 
 @dataclass
@@ -53,7 +53,7 @@ class ReferenceAdapter:
 
     name = "reference"
     supported_decisions = {"none", "retry", "stop"}
-    portable_kinds: dict[str, str] = {"skill": ".harness-package-manager/skills/"}
+    portable_kinds: dict[str, str] = {"skill": ".agent-lock/skills/"}
     native_kinds: list[str] = []
 
     def __init__(self) -> None:
@@ -133,7 +133,7 @@ class _Registry:
         import importlib.metadata as _md
 
         try:
-            eps = _md.entry_points(group="hpm.adapters")
+            eps = _md.entry_points(group="al.adapters")
         except Exception:
             return
         for ep in eps:
@@ -150,7 +150,7 @@ class _Registry:
 
     def get(self, name: str) -> HarnessAdapter:
         if name not in self._adapters:
-            from hpm.errors import UnsupportedComponent
+            from al.errors import UnsupportedComponent
 
             raise UnsupportedComponent(f"unknown harness adapter: {name!r}")
         return self._adapters[name]

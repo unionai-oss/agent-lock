@@ -1,4 +1,4 @@
-//! End-to-end tests for `hpm upgrade` (§5.8) and `hpm optimize` (§5.9).
+//! End-to-end tests for `al upgrade` (§5.8) and `al optimize` (§5.9).
 //!
 //! These chdir, so they are consolidated into a single test that runs
 //! sequentially within the process (integration-test threads share the cwd).
@@ -6,8 +6,8 @@
 use std::fs;
 use std::path::Path;
 
-use hpm_core::ops::{optimize, plan_upgrade, upgrade, OptimizeSpec, UpgradeSpec};
-use hpm_core::{Lockfile, Manifest, Tuner, LOCKFILE_PATH};
+use agent_lock_core::ops::{optimize, plan_upgrade, upgrade, OptimizeSpec, UpgradeSpec};
+use agent_lock_core::{Lockfile, Manifest, Tuner, LOCKFILE_PATH};
 
 fn make_pack(root: &Path) {
     let taskdir = root.join("t1");
@@ -59,7 +59,7 @@ target = "local"
 
 #[test]
 fn ops_end_to_end_upgrade_and_optimize() {
-    let dir = std::env::temp_dir().join(format!("hpm-ops-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("al-ops-{}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     let cwd = std::env::current_dir().unwrap();

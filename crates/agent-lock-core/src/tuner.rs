@@ -274,7 +274,7 @@ impl Tuner {
 
     fn write_report(&self, lock: &Lockfile, _scores: &[StackScore]) -> Result<()> {
         let report = self.workdir.join("report.md");
-        std::fs::write(&report, format!("# harness-package-manager report\n\n{}\n", lock.summary()))?;
+        std::fs::write(&report, format!("# agent-lock report\n\n{}\n", lock.summary()))?;
         Ok(())
     }
 }

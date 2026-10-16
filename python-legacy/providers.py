@@ -15,7 +15,7 @@ import hashlib
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
-from hpm.errors import AgentLockError, content_hash
+from al.errors import AgentLockError, content_hash
 
 PLANNER = "planner"
 EXECUTOR = "executor"

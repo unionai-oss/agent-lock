@@ -1,4 +1,4 @@
-"""Shared exceptions and small helpers for harness-package-manager."""
+"""Shared exceptions and small helpers for agent-lock."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import Any
 
 
 class AgentLockError(Exception):
-    """Base class for all harness-package-manager errors."""
+    """Base class for all agent-lock errors."""
 
 
 class ManifestError(AgentLockError):
@@ -22,11 +22,11 @@ class LockfileError(AgentLockError):
 
 
 class CheckFailed(AgentLockError):
-    """Static verification (``hpm check``) found violations."""
+    """Static verification (``al check``) found violations."""
 
 
 class VerifyFailed(AgentLockError):
-    """Dynamic verification (``hpm verify``) found drift."""
+    """Dynamic verification (``al verify``) found drift."""
 
 
 class UnsupportedComponent(AgentLockError):

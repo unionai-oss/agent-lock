@@ -1,11 +1,11 @@
-"""Tests for the `hpm` Python bindings (Rust-backed)."""
+"""Tests for the `al` Python bindings (Rust-backed)."""
 
 import json
 from pathlib import Path
 
 import pytest
 
-import hpm
+import agent_lock as al
 
 REPO = Path(__file__).resolve().parent.parent
 TASKS = REPO / "tasks"
@@ -35,24 +35,24 @@ def workspace(tmp_path):
 
 
 def test_module_surface():
-    assert hpm.LOCK_VERSION == 1
-    assert isinstance(hpm.__version__, str)
+    assert al.LOCK_VERSION == 1
+    assert isinstance(al.__version__, str)
     for name in ("Manifest", "Objective", "Budget", "SearchSpace", "Lockfile", "LockedAgent"):
-        assert hasattr(hpm, name)
-    assert callable(hpm.lock)
-    assert callable(hpm.load)
+        assert hasattr(al, name)
+    assert callable(al.lock)
+    assert callable(al.load)
 
 
 def test_search_space_tune(workspace, monkeypatch):
     ws, base = workspace
     monkeypatch.chdir(base)
-    space = hpm.SearchSpace(
+    space = al.SearchSpace(
         llm={"planner": ["reference:qwen-7b", "reference:qwen-32b"]},
         decision=["none", "rules:default"],
         harness=["reference"],
         tasks=json.dumps({"packs": [str(ws)], "seeds": 2}),
     )
-    lf = hpm.lock(space, backend="local", workdir=str(base / ".agentlock"))
+    lf = al.lock(space, backend="local", workdir=str(base / ".agentlock"))
     assert lf.harness == "reference"
     ev = json.loads(lf.evidence)
     assert ev["trials"] >= 1
@@ -60,14 +60,14 @@ def test_search_space_tune(workspace, monkeypatch):
     assert (base / "hpm.lock").exists()
 
     # load + run
-    agent = hpm.load(str(base / "hpm.lock"))
+    agent = al.load(str(base / "hpm.lock"))
     assert agent.summary() != ""
     outcome = json.loads(agent.run("do the demo task"))
     assert "success" in outcome
 
 
 def test_manifest_load_write(tmp_path):
-    m = hpm.Manifest.from_str(
+    m = al.Manifest.from_str(
         "[project]\nname='m'\n[candidates.llm.planner]\nany_of=['reference:qwen-7b']\n"
         "[candidates]\nharness=['reference']\n[budget]\nstrategy='grid'\n"
     )
@@ -77,7 +77,7 @@ def test_manifest_load_write(tmp_path):
 
 
 def test_upgrade_and_optimize(tmp_path, monkeypatch):
-    """hpm upgrade (plan/apply/rollback) and hpm optimize via the bindings."""
+    """al upgrade (plan/apply/rollback) and al optimize via the bindings."""
     import json as _json
 
     # a local task pack
@@ -99,23 +99,23 @@ def test_upgrade_and_optimize(tmp_path, monkeypatch):
     )
     (tmp_path / "hpm.toml").write_text(manifest)
 
-    hpm.lock(manifest="hpm.toml", backend="local", workdir=str(tmp_path / ".agentlock"))
+    al.lock(manifest="hpm.toml", backend="local", workdir=str(tmp_path / ".agentlock"))
     assert (tmp_path / "hpm.lock").exists()
 
-    plan = _json.loads(hpm.upgrade(manifest="hpm.toml", all=True))
+    plan = _json.loads(al.upgrade(manifest="hpm.toml", all=True))
     assert plan["plan"]["upgradeable"] and plan["plan"]["upgradeable"][0]["to"] == "qwen-32b"
 
-    applied = _json.loads(hpm.upgrade(manifest="hpm.toml", all=True, apply=True))
+    applied = _json.loads(al.upgrade(manifest="hpm.toml", all=True, apply=True))
     assert applied["applied"] is True
     assert (tmp_path / "hpm.lock.prev").exists()
 
-    rolled = _json.loads(hpm.upgrade(manifest="hpm.toml", rollback=True))
+    rolled = _json.loads(al.upgrade(manifest="hpm.toml", rollback=True))
     assert rolled["rolled_back"] is True
 
-    opt = _json.loads(hpm.optimize(manifest="hpm.toml", depth="hpo", out=str(tmp_path / "harness.opt.lock")))
+    opt = _json.loads(al.optimize(manifest="hpm.toml", depth="hpo", out=str(tmp_path / "harness.opt.lock")))
     assert (tmp_path / "harness.opt.lock").exists()
     assert opt["report"]["depth"] == "hpo"
     # reload the opt lock and confirm it is marked optimized
-    opt_lock = hpm.Lockfile.load(str(tmp_path / "harness.opt.lock"))
+    opt_lock = al.Lockfile.load(str(tmp_path / "harness.opt.lock"))
     assert "optimized" in opt_lock.to_json() or opt_lock.harness
     assert opt["summary"] != ""

@@ -2,7 +2,7 @@
 
 Search over candidate stacks, run trials, grade, select a winner from the Pareto
 front, and serialize the resolved stack plus evidence. Runs on the local backend by
-default; devbox/cluster delegate to the Flyte pipeline (``hpm.flyte``).
+default; devbox/cluster delegate to the Flyte pipeline (``al.flyte``).
 """
 
 from __future__ import annotations
@@ -13,9 +13,9 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from hpm import backends
-from hpm.adapters import ADAPTERS
-from hpm.errors import AgentLockError
+from agent_lock import backends
+from al.adapters import ADAPTERS
+from al.errors import AgentLockError
 from hpm.lockfile import (
     LLM,
     Context,
@@ -30,11 +30,11 @@ from hpm.lockfile import (
     Tool,
     Verify,
 )
-from hpm.manifest import Manifest
-from hpm.runcache import TrialCache
-from hpm.search import Stack, StackScore, TrialResult, select_winner
-from hpm.store import Store
-from hpm.tasks import Task, TaskPack
+from al.manifest import Manifest
+from al.runcache import TrialCache
+from al.search import Stack, StackScore, TrialResult, select_winner
+from al.store import Store
+from al.tasks import Task, TaskPack
 
 
 class Tuner:
@@ -104,7 +104,7 @@ class Tuner:
             shutil.rmtree(ws)
         ws.mkdir(parents=True, exist_ok=True)
 
-        from hpm.traces import TraceRecorder
+        from al.traces import TraceRecorder
 
         recorder = TraceRecorder(stack.hash(), task.id, seed)
         adapter = ADAPTERS.get(stack.harness)
@@ -156,7 +156,7 @@ class Tuner:
         if bk.target == "local":
             results = asyncio.run(bk.run_sweep(candidates, self.run_dir, run))
         else:
-            from hpm.flyte import run_search  # provisional Layer 3
+            from al.flyte import run_search  # provisional Layer 3
 
             results = run_search(self, candidates, backend=bk)
 
@@ -173,7 +173,7 @@ class Tuner:
         return lock
 
     def _write_report(self, lock: Lockfile, scores: list[StackScore]) -> None:
-        lines = ["# harness-package-manager report", ""]
+        lines = ["# agent-lock report", ""]
         lines.append("## Locked stack")
         lines.append(f"```\n{lock.summary()}\n```")
         lines.append("")
@@ -181,7 +181,7 @@ class Tuner:
         lines.append("")
         lines.append("| harness | llm | decision | success-rate | cost |")
         lines.append("|---|---|---|---|---|")
-        from hpm.search import pareto_front
+        from al.search import pareto_front
 
         for s in pareto_front(scores):
             lines.append(

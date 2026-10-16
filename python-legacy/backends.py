@@ -4,7 +4,7 @@ Maps the tuning execution loop onto a target:
 
 - ``local`` — native async runner (bounded concurrency, local run cache). Flyte is
   imported lazily and only for devbox/cluster, so Layer 0-2 user code never needs it.
-- ``devbox`` / ``cluster`` — a Flyte 2 pipeline (see ``hpm.flyte``) run through
+- ``devbox`` / ``cluster`` — a Flyte 2 pipeline (see ``al.flyte``) run through
   ``flyte.run``; reads ``~/.flyte/config.yaml`` for cluster targets.
 """
 
@@ -16,8 +16,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
-from hpm.search import Stack, TrialResult
-from hpm.tasks import Task
+from al.search import Stack, TrialResult
+from al.tasks import Task
 
 
 @dataclass
@@ -84,7 +84,7 @@ class FlyteBackend:
 
     ``local`` maps onto flyte passthrough; ``devbox`` and ``cluster`` read the
     Flyte config (``~/.flyte/config.yaml`` by default) and call ``flyte.run`` on the
-    pipeline defined in ``hpm.flyte``.
+    pipeline defined in ``al.flyte``.
     """
 
     def __init__(self, target: str = "cluster", config: str | Path | None = None) -> None:

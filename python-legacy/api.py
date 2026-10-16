@@ -1,7 +1,7 @@
 """Layer 1 — the Python API (scriptable, embeddable).
 
 Everything here is pure Python with no Flyte imports. ``flyte`` appears only in
-``hpm.flyte`` (Layer 3) and is imported lazily by the cluster/devbox backend.
+``al.flyte`` (Layer 3) and is imported lazily by the cluster/devbox backend.
 """
 
 from __future__ import annotations
@@ -10,12 +10,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from hpm import backends
+from agent_lock import backends
 from hpm.lockfile import Lockfile
-from hpm.manifest import Backend, Budget, Manifest, Objective
-from hpm.runtime import LockedAgent
-from hpm.tasks import TaskPack
-from hpm.tuner import Tuner
+from al.manifest import Backend, Budget, Manifest, Objective
+from al.runtime import LockedAgent
+from al.tasks import TaskPack
+from al.tuner import Tuner
 
 
 # --------------------------------------------------------------------------- #

@@ -1,8 +1,9 @@
-//! PyO3 Python bindings for **harness-package-manager**.
+//! PyO3 Python bindings for **agent-lock**.
 //!
-//! Exposes the same user-facing API as the (reference) pure-Python `hpm`
-//! package, backed by the Rust core (`hpm-core`): `Manifest`, `SearchSpace`,
-//! `Objective`, `Budget`, `lock()`, `load()`, and the `Lockfile` model.
+//! Exposes the same user-facing API as the (reference) pure-Python `agent_lock`
+//! package, backed by the Rust core (`agent-lock-core`): `Manifest`,
+//! `SearchSpace`, `Objective`, `Budget`, `lock()`, `load()`, and the `Lockfile`
+//! model.
 //!
 //! Dict-shaped data is exchanged as canonical JSON strings to keep the binding
 //! surface small and robust.
@@ -12,7 +13,7 @@ use std::path::{Path, PathBuf};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
-use hpm_core as core;
+use agent_lock_core as core;
 
 fn py_err(e: core::Error) -> PyErr {
     PyValueError::new_err(e.to_string())
@@ -22,7 +23,7 @@ fn py_err(e: core::Error) -> PyErr {
 // Manifest
 // --------------------------------------------------------------------------- //
 /// A parsed `hpm.toml`.
-#[pyclass(module = "hpm", name = "Manifest")]
+#[pyclass(module = "agent_lock", name = "Manifest")]
 #[derive(Clone)]
 pub struct PyManifest {
     inner: core::Manifest,
@@ -66,7 +67,7 @@ impl PyManifest {
 // --------------------------------------------------------------------------- //
 // Objective / Budget
 // --------------------------------------------------------------------------- //
-#[pyclass(module = "hpm", name = "Objective")]
+#[pyclass(module = "agent_lock", name = "Objective")]
 #[derive(Clone)]
 pub struct PyObjective {
     primary: String,
@@ -104,7 +105,7 @@ impl PyObjective {
     }
 }
 
-#[pyclass(module = "hpm", name = "Budget")]
+#[pyclass(module = "agent_lock", name = "Budget")]
 #[derive(Clone)]
 pub struct PyBudget {
     max_spend_usd: Option<f64>,
@@ -141,7 +142,7 @@ impl PyBudget {
 // --------------------------------------------------------------------------- //
 // SearchSpace
 // --------------------------------------------------------------------------- //
-#[pyclass(module = "hpm", name = "SearchSpace")]
+#[pyclass(module = "agent_lock", name = "SearchSpace")]
 #[derive(Clone)]
 pub struct PySearchSpace {
     llm: std::collections::BTreeMap<String, Vec<String>>,
@@ -271,7 +272,7 @@ fn object_of(v: &serde_json::Value) -> std::collections::BTreeMap<String, serde_
 // --------------------------------------------------------------------------- //
 // Lockfile
 // --------------------------------------------------------------------------- //
-#[pyclass(module = "hpm", name = "Lockfile")]
+#[pyclass(module = "agent_lock", name = "Lockfile")]
 pub struct PyLockfile {
     inner: core::Lockfile,
 }
@@ -345,7 +346,7 @@ impl PyLockfile {
 // --------------------------------------------------------------------------- //
 // LockedAgent
 // --------------------------------------------------------------------------- //
-#[pyclass(module = "hpm", name = "LockedAgent")]
+#[pyclass(module = "agent_lock", name = "LockedAgent")]
 pub struct PyLockedAgent {
     lock: core::Lockfile,
 }
@@ -413,7 +414,7 @@ fn resolve_manifest(py: Python<'_>, manifest: Option<PyObject>, backend: Option<
                 }
             } else {
                 return Err(PyValueError::new_err(
-                    "manifest must be a hpm.Manifest, hpm.SearchSpace, a path, or TOML text",
+                    "manifest must be a al.Manifest, al.SearchSpace, a path, or TOML text",
                 ));
             }
         }
@@ -494,7 +495,7 @@ fn optimize(
 }
 
 #[pymodule]
-fn _hpm(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn _agent_lock(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyManifest>()?;
     m.add_class::<PyObjective>()?;
     m.add_class::<PyBudget>()?;

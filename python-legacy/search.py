@@ -15,7 +15,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from hpm.errors import content_hash
+from al.errors import content_hash
 
 
 @dataclass

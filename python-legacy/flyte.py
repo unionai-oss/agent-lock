@@ -19,7 +19,7 @@ def _require_flyte():
         import flyte  # noqa: F401
     except ImportError as e:  # pragma: no cover - depends on extras
         raise RuntimeError(
-            "the Flyte backend needs the `flyte` SDK: `pip install harness-package-manager[flyte]`; "
+            "the Flyte backend needs the `flyte` SDK: `pip install agent-lock[flyte]`; "
             "fall back to --backend local otherwise"
         ) from e
     return __import__("flyte")
@@ -29,11 +29,11 @@ def envs():
     """Return the standard TaskEnvironments (core, trial, grade, train, serve)."""
     import flyte
 
-    core = flyte.TaskEnvironment(name="hpm_core")
+    core = flyte.TaskEnvironment(name="agent_lock_core")
     trial = flyte.TaskEnvironment(
-        name="hpm_trial",
+        name="al_trial",
         image=flyte.Image.from_debian_base(python_version=(3, 12)).with_pip_packages(
-            "harness-package-manager", "pydantic", "python-frontmatter", "PyYAML",
+            "agent-lock", "pydantic", "python-frontmatter", "PyYAML",
         ),
     )
     return {
@@ -50,11 +50,11 @@ def build_pipeline():
     """
     import flyte
 
-    env = flyte.TaskEnvironment(name="hpm_lockpipeline")
+    env = flyte.TaskEnvironment(name="al_lockpipeline")
 
     @env.task(cache="auto")
     async def lock_pipeline(manifest_path: str, backend: str = "local") -> dict[str, Any]:
-        from hpm.api import lock
+        from al.api import lock
 
         lf = lock(manifest_path, backend=backend)
         return lf.to_dict()

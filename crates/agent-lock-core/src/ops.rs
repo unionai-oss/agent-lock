@@ -1,5 +1,5 @@
-//! Operational commands built on the tuner: `hpm upgrade` (§5.8) and
-//! `hpm optimize` (§5.9, §8.5).
+//! Operational commands built on the tuner: `al upgrade` (§5.8) and
+//! `al optimize` (§5.9, §8.5).
 //!
 //! - **upgrade** moves locked components to newer/breaking versions, keeping a
 //!   `hpm.lock.prev` for `--rollback`, and gates the apply on evidence not
@@ -104,7 +104,7 @@ fn model_of(spec: &str) -> String {
     spec.rsplit_once(':').map(|(_, m)| m.to_string()).unwrap_or_else(|| spec.to_string())
 }
 
-/// `hpm upgrade`. `manifest` should be loaded from `hpm.toml`.
+/// `al upgrade`. `manifest` should be loaded from `hpm.toml`.
 pub fn upgrade(manifest: Manifest, spec: &UpgradeSpec) -> Result<UpgradeOutcome> {
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let lock_path = cwd.join(LOCKFILE_PATH);
@@ -275,7 +275,7 @@ fn search_grid(manifest: &Manifest, depth: &str) -> Vec<(String, u32)> {
     out
 }
 
-/// `hpm optimize` -> `harness.opt.lock` (§5.9).
+/// `al optimize` -> `harness.opt.lock` (§5.9).
 pub fn optimize(manifest: Manifest, spec: &OptimizeSpec) -> Result<OptimizeOutcome> {
     let depth = spec.resolved_depth().to_string();
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -431,7 +431,7 @@ fn build_optimized_lock(
     if depth == "ft" || depth == "full" {
         finetune.push(serde_json::json!({
             "target": "decision",
-            "base": "hf://hpm/decider-1.5b",
+            "base": "hf://al/decider-1.5b",
             "data": format!("traces://{data_arg}"),
             "adapter": {"lora": "store://sha256:PLAN"},
             "samples": 0,

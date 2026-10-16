@@ -1,4 +1,4 @@
-//! Core library for **harness-package-manager** (`hpm`).
+//! Core library for **agent-lock** (`al`).
 //!
 //! Implements the manifest, the lockfile, the content-addressed store, task
 //! packs, the deterministic reference provider/harness, the search layer, and

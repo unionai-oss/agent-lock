@@ -7,13 +7,13 @@ import sys
 
 import click
 
-from hpm import __version__
+from agent_lock import __version__
 
 
 @click.group()
-@click.version_option(__version__, prog_name="hpm")
+@click.version_option(__version__, prog_name="al")
 def main() -> None:
-    """hpm — lock your agent into place."""
+    """al — lock your agent into place."""
 
 
 @main.command()
@@ -28,7 +28,7 @@ def init(name: str, pack: str, force: bool) -> None:
     if p.exists() and not force:
         click.echo("hpm.toml already exists (use --force to overwrite)")
         sys.exit(1)
-    from hpm.scaffold import render_default_manifest
+    from al.scaffold import render_default_manifest
 
     p.write_text(render_default_manifest(name=name, pack=pack))
     click.echo(f"wrote {p}")
@@ -40,9 +40,9 @@ def init(name: str, pack: str, force: bool) -> None:
 @click.option("--max-trials", default=None, type=int, help="Cap the number of trials")
 def lock(backend: str | None, config: str | None, max_trials: int | None) -> None:
     """Tune the search space and write hpm.lock."""
-    from hpm import backends
-    from hpm.api import lock as _lock
-    from hpm.manifest import Manifest
+    from agent_lock import backends
+    from al.api import lock as _lock
+    from al.manifest import Manifest
 
     m = Manifest.load("hpm.toml")
     if backend:
@@ -69,7 +69,7 @@ def check() -> None:
     """Static verification (CI-friendly exit code)."""
 
     from hpm.lockfile import Lockfile
-    from hpm.manifest import Manifest
+    from al.manifest import Manifest
 
     m = Manifest.load("hpm.toml")
     lf = Lockfile.load("hpm.lock")
@@ -105,7 +105,7 @@ def tree() -> None:
 @click.argument("prompt")
 def run(prompt: str) -> None:
     """Run the locked agent on a prompt (with runtime guard)."""
-    from hpm.api import load
+    from al.api import load
 
     agent = load("hpm.lock", mode="strict")
     outcome = asyncio.run(agent.run(prompt))
@@ -118,7 +118,7 @@ def run(prompt: str) -> None:
 @click.option("--format", "fmt", default="text", type=click.Choice(["text", "md"]))
 def diff(fmt: str) -> None:
     """Structural + evidence diff vs. the committed hpm.lock."""
-    from hpm.diffing import Diff
+    from al.diffing import Diff
 
     click.echo(Diff().run(fmt=fmt))
 
@@ -132,8 +132,8 @@ def backend() -> None:
 @click.option("--config", default=None, help="Flyte config path (default ~/.flyte/config.yaml)")
 def backend_status(config: str | None) -> None:
     """Report the active backend and Flyte config connectivity."""
-    from hpm import backends
-    from hpm.manifest import Manifest
+    from agent_lock import backends
+    from al.manifest import Manifest
 
     try:
         m = Manifest.load("hpm.toml")
@@ -149,7 +149,7 @@ def backend_status(config: str | None) -> None:
             # verify connectivity without launching work
             click.echo("flyte SDK present; connection verified at lock/run time")
         else:
-            click.echo("flyte SDK not importable — install `pip install harness-package-manager[flyte]`")
+            click.echo("flyte SDK not importable — install `pip install agent-lock[flyte]`")
 
 
 def _render_lock(lf) -> str:

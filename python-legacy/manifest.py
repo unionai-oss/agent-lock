@@ -13,7 +13,7 @@ from typing import Any, Literal
 import tomllib
 from pydantic import BaseModel, Field, field_validator
 
-from hpm.errors import ManifestError, canon_json, sha256_file, sha256_text
+from al.errors import ManifestError, canon_json, sha256_file, sha256_text
 
 
 # --------------------------------------------------------------------------- #

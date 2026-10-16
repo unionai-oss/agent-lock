@@ -12,7 +12,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from hpm.errors import AgentLockError, canon_json, sha256_bytes
+from al.errors import AgentLockError, canon_json, sha256_bytes
 
 
 class StoreError(AgentLockError):

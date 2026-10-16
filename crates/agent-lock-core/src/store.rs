@@ -81,7 +81,7 @@ mod tests {
 
     #[test]
     fn roundtrip() {
-        let dir = std::env::temp_dir().join(format!("hpm-store-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("al-store-{}", std::process::id()));
         let s = Store::new(&dir);
         let ref_ = s.put_text("hello").unwrap();
         assert!(ref_.starts_with("sha256:"));

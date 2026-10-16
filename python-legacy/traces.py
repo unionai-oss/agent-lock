@@ -1,6 +1,6 @@
 """Trace schema, recorder, and replay.
 
-Built on top of the OTel GenAI conventions with harness-package-manager extensions. Payloads are
+Built on top of the OTel GenAI conventions with agent-lock extensions. Payloads are
 content-addressed so traces stay small, shareable, and redactable. The trace layer
 stands alone: it is usable without the tuner.
 """
@@ -11,7 +11,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-from hpm.errors import canon_json, sha256_text
+from al.errors import canon_json, sha256_text
 
 
 @dataclass

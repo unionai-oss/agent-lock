@@ -1,6 +1,6 @@
 """Structural + evidence diff between the working lock and the committed one.
 
-``hpm diff`` compares the current ``hpm.lock`` (the result of the last ``hpm lock``)
+``al diff`` compares the current ``hpm.lock`` (the result of the last ``al lock``)
 against the git-committed version, and renders an evidence diff suitable for a PR
 description.
 """

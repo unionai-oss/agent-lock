@@ -1,24 +1,24 @@
 [package]
-name = "harness-package-manager"
+name = "agent-lock"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Python bindings for harness-package-manager (hpm)."
+description = "Python bindings for agent-lock."
 
 [lib]
-name = "hpm"
+name = "agent_lock"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-harness-package-manager-core = { path = "../hpm-core", version = "0.1.0" }
+agent-lock-core = { path = "../agent-lock-core", version = "0.1.0" }
 pyo3 = { workspace = true }
 serde_json = { workspace = true }
 
 [features]
 default = []
 
-# Build the release extension module as the importable `hpm` package.
+# Build the release extension module as the importable `agent_lock` package.
 [package.metadata.maturin]
 python-source = "."

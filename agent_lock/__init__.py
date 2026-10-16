@@ -1,9 +1,9 @@
-"""harness-package-manager — lock your agent into place.
+"""agent-lock — lock your agent into place.
 
-User-facing Python API, backed by the Rust core (compiled into ``hpm._hpm``).
+User-facing Python API, backed by the Rust core (compiled into ``agent_lock._agent_lock``).
 """
 
-from ._hpm import (
+from ._agent_lock import (
     LOCK_VERSION,
     Budget,
     LockedAgent,

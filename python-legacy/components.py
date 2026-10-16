@@ -3,10 +3,10 @@
 Everything in a lock is a component of some *kind* (``tool``, ``mcp``, ``skill``,
 ``instructions``, … or a namespaced native kind such as ``pydantic-ai.capability``).
 Kinds are a plugin point: each is a small class registered by an adapter or a
-third-party package through the ``hpm.component_kinds`` entry point.
+third-party package through the ``al.component_kinds`` entry point.
 
 This module defines the ``ComponentKind`` protocol, the registry, pin strategies,
-and the concrete portable kinds shipped with harness-package-manager.
+and the concrete portable kinds shipped with agent-lock.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel
 
-from hpm.errors import UnsupportedComponent, content_hash
+from al.errors import UnsupportedComponent, content_hash
 
 # --------------------------------------------------------------------------- #
 # Pin strategies
@@ -142,7 +142,7 @@ class KindRegistry:
 
     def _load_entry_points(self) -> None:
         try:
-            eps = _md.entry_points(group="hpm.component_kinds")
+            eps = _md.entry_points(group="al.component_kinds")
         except Exception:  # pragma: no cover - packaging variants
             return
         for ep in eps:

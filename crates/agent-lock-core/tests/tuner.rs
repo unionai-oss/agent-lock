@@ -4,7 +4,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use hpm_core::{Manifest, Tuner};
+use agent_lock_core::{Manifest, Tuner};
 
 fn make_pack(root: &Path) -> PathBuf {
     let taskdir = root.join("t1");
@@ -79,7 +79,7 @@ target = "local"
 
 #[test]
 fn tune_writes_a_lock() {
-    let base = std::env::temp_dir().join(format!("hpm-tuner-{}", std::process::id()));
+    let base = std::env::temp_dir().join(format!("al-tuner-{}", std::process::id()));
     let _ = fs::remove_dir_all(&base);
     fs::create_dir_all(&base).unwrap();
     let cwd = std::env::current_dir().unwrap();
@@ -98,7 +98,7 @@ fn tune_writes_a_lock() {
     assert!(lock.evidence.trials >= 2);
 
     // reload and confirm it round-trips
-    let reloaded = hpm_core::Lockfile::load(&lock_path).unwrap();
+    let reloaded = agent_lock_core::Lockfile::load(&lock_path).unwrap();
     assert_eq!(reloaded.summary(), lock.summary());
     assert!(reloaded.check_manifest(&mh).is_empty());
 

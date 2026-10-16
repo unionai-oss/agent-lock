@@ -1,7 +1,7 @@
-"""The `hpm` command line interface.
+"""The `al` command line interface.
 
-Thin Python layer over the compiled Rust bindings (`hpm`), so the CLI story stays
-consistent with the Python API. Install the wheel (pip / uv / uvx) and run `hpm`.
+Thin Python layer over the compiled Rust bindings (`al`), so the CLI story stays
+consistent with the Python API. Install the wheel (pip / uv / uvx) and run `al`.
 """
 
 from __future__ import annotations
@@ -10,16 +10,16 @@ import sys
 
 import click
 
-from hpm import LOCK_VERSION, Lockfile, Manifest, __version__, load
-from hpm import lock as _lock
-from hpm import optimize as hpm_optimize
-from hpm import upgrade as hpm_upgrade
+from agent_lock import LOCK_VERSION, Lockfile, Manifest, __version__, load
+from agent_lock import lock as _lock
+from agent_lock import optimize as al_optimize
+from agent_lock import upgrade as al_upgrade
 
 
 @click.group()
-@click.version_option(__version__, prog_name="hpm")
+@click.version_option(__version__, prog_name="al")
 def main() -> None:
-    """hpm — harness-package-manager: lock your agent into place."""
+    """al — agent-lock: lock your agent into place."""
 
 
 @main.command()
@@ -109,7 +109,7 @@ def upgrade(to: str | None, all: bool, apply: bool, rollback: bool, force: bool,
     import json as _json
 
     result = _json.loads(
-        hpm_upgrade(to=to, all=all, apply=apply, rollback=rollback, force=force, workdir=workdir)
+        al_upgrade(to=to, all=all, apply=apply, rollback=rollback, force=force, workdir=workdir)
     )
     for item in result.get("plan", {}).get("upgradeable", []):
         click.echo(f"  {item['role']}: {item['from']} -> {item['to']}")
@@ -133,7 +133,7 @@ def optimize(depth: str, data: str, harness: str | None, out: str, strict: bool,
     import json as _json
 
     result = _json.loads(
-        hpm_optimize(depth=depth, data=data, harness=harness, out=out, strict=strict, apply=apply, max_trials=max_trials, workdir=workdir)
+        al_optimize(depth=depth, data=data, harness=harness, out=out, strict=strict, apply=apply, max_trials=max_trials, workdir=workdir)
     )
     r = result.get("report", {})
     click.echo(f"wrote {result.get('path')}")
@@ -162,7 +162,7 @@ def backend_status() -> None:
 
 
 def _default_manifest(name: str, pack: str) -> str:
-    return f"""# hpm manifest — declare what the tuner may try and what 'best' means.
+    return f"""# al manifest — declare what the tuner may try and what 'best' means.
 [project]
 name = "{name}"
 

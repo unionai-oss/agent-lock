@@ -1,19 +1,19 @@
-# harness-package-manager (hpm)
+# agent-lock (al)
 
 **Lock your agent into place.**
 
-`hpm` treats an agent system the way a package manager treats dependencies. You
+`al` treats an agent system the way a package manager treats dependencies. You
 bring your domain tasks, the models you're allowed to use, and the harness you
-like. `hpm` searches the stack, measures it, and writes an `hpm.lock`: a pinned,
+like. `al` searches the stack, measures it, and writes an `hpm.lock`: a pinned,
 version-controlled, enforceable description of the agent that actually works for
 your domain.
 
-| Package manager            | hpm                                                            |
+| Package manager            | al                                                            |
 |----------------------------|----------------------------------------------------------------|
 | `pyproject.toml`           | `hpm.toml` — the **manifest**: what you allow and require |
 | dependency resolver        | **tuner**: search over LLMs × decision models × harnesses × policies |
 | `uv.lock`                  | `hpm.lock` — the **lockfile**: what was chosen, pinned, hashed, plus the evidence |
-| CI `--locked` check        | `hpm check` — fail if the running stack drifts from the lock |
+| CI `--locked` check        | `al check` — fail if the running stack drifts from the lock |
 
 See `SPEC.md` for the full design (manifest, lockfile schema, component model,
 task packs, search strategies, the Flyte backend, open-weights models).
@@ -23,21 +23,21 @@ The (superseded) reference pure-Python implementation is preserved under
 ## Architecture
 
 ```
-            Python API/CLI  (import hpm, `hpm` command)     <- PyO3 bindings
+            Python API/CLI  (import agent_lock as al, `al` command)     <- PyO3 bindings
                          │
                          ▼
-                  hpm-core (Rust)          manifest · lockfile · store ·
+                  al-core (Rust)          manifest · lockfile · store ·
                                            task packs · search · tuner
                          │
                          └── flyte backend (flyte-sdk-rs, optional feature)
 ```
 
-- `crates/hpm-core` — the core library (pure Rust, no Python).
-- `crates/hpm` — PyO3 extension (`hpm._hpm`) exposing the same user-facing
-  Python API as the reference implementation via the `hpm` package.
-- `hpm/` — the mixed Python package: re-exports the compiled `hpm._hpm` and the
-  `hpm` CLI.
-- `crates/hpm-core/src/flyte.rs` — provisional backend integration using
+- `crates/agent-lock-core` — the core library (pure Rust, no Python).
+- `crates/agent-lock` — PyO3 extension (`agent_lock._agent_lock`) exposing the same user-facing
+  Python API as the reference implementation via the `al` package.
+- `al/` — the mixed Python package: re-exports the compiled `al._agent_lock` and the
+  `al` CLI.
+- `crates/agent-lock-core/src/flyte.rs` — provisional backend integration using
   [flyte-sdk-rs](https://github.com/flyteorg/flyte-sdk-rs) behind the `flyte`
   cargo feature.
 
@@ -47,32 +47,32 @@ From the Rust side you depend on the crate; from Python you get native bindings.
 
 ```bash
 # Python bindings — pip / uv / uvx
-pip install harness-package-manager          # or: uv add / uvx
+pip install agent-lock          # or: uv add / uvx
 uv pip install -e .                            # editable dev install (this repo)
 
 # Rust crate(s)  (publish later; locally)
-cargo add harness-package-manager --path crates/hpm
+cargo add agent-lock --path crates/agent-lock
 # core library, if you depend on it directly
-cargo add harness-package-manager-core --path crates/hpm-core
+cargo add agent-lock-core --path crates/agent-lock-core
 ```
 
 A local editable build needs a Rust toolchain + a Python ≤3.13 interpreter:
 
 ```bash
 python3.13 -m venv .venv && .venv/bin/pip install click pytest
-maturin develop -m crates/hpm/Cargo.toml      # builds + installs the hpm wheel
+maturin develop -m crates/agent-lock/Cargo.toml      # builds + installs the al wheel
 ```
 
 ## Quickstart (local, no accounts)
 
 ```bash
-hpm init --name demo --pack ./tasks   # write a starter hpm.toml
-hpm lock                              # tune the search space -> hpm.lock + report
-hpm show                              # pretty-print the locked stack + evidence
-hpm check                             # static verification (CI-friendly exit code)
-hpm tree                              # component dependency graph
-hpm run "solve this task"             # run the locked agent with the runtime guard
-hpm backend status                    # report the active backend / Flyte config
+al init --name demo --pack ./tasks   # write a starter hpm.toml
+al lock                              # tune the search space -> hpm.lock + report
+al show                              # pretty-print the locked stack + evidence
+al check                             # static verification (CI-friendly exit code)
+al tree                              # component dependency graph
+al run "solve this task"             # run the locked agent with the runtime guard
+al backend status                    # report the active backend / Flyte config
 ```
 
 The built-in `reference` provider and harness are deterministic and offline, so the
@@ -81,8 +81,8 @@ whole loop runs with zero setup and no API keys.
 ## Python API (Layer 1)
 
 ```python
-import hpm
-from hpm import SearchSpace, Objective, Budget
+import agent_lock as al
+from agent_lock import SearchSpace, Objective, Budget
 
 space = SearchSpace(
     llm={"planner": ["reference:qwen-7b", "reference:qwen-32b"]},
@@ -93,7 +93,7 @@ space = SearchSpace(
 lock = hpm.lock(space, backend="local", workdir=".agentlock")
 print(lock.summary())
 
-agent = hpm.load("hpm.lock")
+agent = al.load("hpm.lock")
 print(agent.run("clean ./data/orders.csv"))
 ```
 
@@ -108,22 +108,22 @@ print(agent.run("clean ./data/orders.csv"))
 ## Development
 
 ```bash
-cargo test -p hpm-core            # Rust core + integration tests
+cargo test -p agent-lock-core            # Rust core + integration tests
 .venv/bin/python -m pytest tests  # Python bindings tests
-ruff check hpm/tests              # lint the Python layer
+ruff check al/tests              # lint the Python layer
 ```
 
 ## Release & publishing
 
 CI/CD publishes on git tags `v*` (and via `workflow_dispatch`):
 
-- **Python bindings** → PyPI as `harness-package-manager` (`.github/workflows/publish-python.yml`).
+- **Python bindings** → PyPI as `agent-lock` (`.github/workflows/publish-python.yml`).
   `maturin` builds an **abi3** wheel (CPython ≥ 3.9) for Linux/macOS/Windows and a source dist.
   Publishing uses [trusted publishing](https://docs.pypi.org/trusted-publishers/) (OIDC) —
   register this GitHub repo as a PyPI publisher for the `pypi` environment — or set a token.
   For test-PyPI publishes, run the workflow with `--pypi test` and set `TEST_PYPI_TOKEN`.
-- **Rust crates** → crates.io as `harness-package-manager-core` (dependency) then
-  `harness-package-manager` (`.github/workflows/publish-cargo.yml`).
+- **Rust crates** → crates.io as `agent-lock-core` (dependency) then
+  `agent-lock` (`.github/workflows/publish-cargo.yml`).
   Set the `CARGO_REGISTRY_TOKEN` secret.
 
 Daily CI (`ci.yml`) runs `cargo test` for the core and `pytest` + `ruff` for the bindings on
