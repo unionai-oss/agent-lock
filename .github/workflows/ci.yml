@@ -5,6 +5,9 @@ on:
     branches: [main, "rust-core", "v0.1-core"]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   rust-core:
     name: Rust core (cargo test)
@@ -34,4 +37,37 @@ jobs:
       - name: Unit tests
         run: python -m pytest tests -q
       - name: Lint
-        run: ruff check harness-lock tests
+        run: ruff check harness_lock tests
+
+  # Catches a broken release in review rather than at tag time: versions agree, the
+  # wheel and sdist build, pass `twine check`, and the wheel installs and runs.
+  packaging:
+    name: Packaging (version, wheel, sdist)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Versions agree
+        run: python scripts/set_version.py --check
+      - uses: PyO3/maturin-action@v1
+        with:
+          args: --release --out dist
+          manylinux: auto
+      - uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist
+      - name: twine check + install smoke test
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade twine
+          twine check dist/*
+          python -m venv /tmp/venv
+          /tmp/venv/bin/pip install dist/*.whl
+          /tmp/venv/bin/hlock --version
+          /tmp/venv/bin/python -c "import harness_lock; print(harness_lock.__version__)"
+      - uses: dtolnay/rust-toolchain@stable
+      - name: cargo publish --dry-run (harness-lock-core)
+        run: cargo publish --dry-run --locked -p harness-lock-core

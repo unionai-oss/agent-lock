@@ -1,43 +1,72 @@
 name: publish-cargo
 
-# Publishes the Rust crates (`harness-lock-core`, `harness-lock`) to crates.io.
+# Publishes `harness-lock-core` to crates.io.
 #
-# Setup (once, in Settings > Secrets and variables > Actions):
-#   - `CARGO_REGISTRY_TOKEN`: a crates.io API token with "publish-new" +
-#     "publish-update" scope for these crate names.
+# The PyO3 bindings crate (`harness-lock`) is built as a Python extension module
+# (`extension-module` feature), so it isn't linkable from Rust and is shipped only
+# as the PyPI wheel; it is marked `publish = false`.
 #
-# Shallow-checkout keeps registry token out of git; publishing a tag that
-# already exists is a no-op (crates.io rejects duplicate versions).
+# Release: `python scripts/set_version.py X.Y.Z`, merge to main, then push tag vX.Y.Z.
+#
+# Manual runs default to a dry run (`cargo publish --dry-run`). Set `dry_run: false`
+# to publish from a manual run.
+#
+# One-time setup (see RELEASING.md): crates.io has no pending publishers, so the first
+# release needs a `CARGO_REGISTRY_TOKEN` secret in the `crates-io` environment
+# (publish-new + publish-update scopes, limited to `harness-lock*`). After the crate
+# exists, switch to crates.io trusted publishing and delete the token.
+#
+# crates.io never accepts the same version twice: re-running a tag that already
+# published fails at the publish step. Bump the version instead.
 
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Package and verify only — do not publish"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-cargo-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  publish-crates:
-    name: cargo publish (harness-lock-core, harness-lock)
+  verify:
+    name: Check version + cargo publish --dry-run
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Versions agree (and match the tag)
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            python scripts/set_version.py --check "$GITHUB_REF_NAME"
+          else
+            python scripts/set_version.py --check
+          fi
       - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo publish --dry-run
+        run: cargo publish --dry-run --locked -p harness-lock-core
 
-      - name: Dry-run harness-lock-core
-        run: cargo publish --dry-run --manifest-path crates/harness-lock-core/Cargo.toml
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-      - name: Publish harness-lock-core (dependency first)
-        run: cargo publish --manifest-path crates/harness-lock-core/Cargo.toml
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-      - name: Dry-run harness-lock
-        run: cargo publish --dry-run --manifest-path crates/harness-lock/Cargo.toml
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-      - name: Publish harness-lock (depends on harness-lock-core)
-        run: cargo publish --manifest-path crates/harness-lock/Cargo.toml
+  publish:
+    name: Publish harness-lock-core
+    needs: verify
+    if: github.event_name == 'push' || inputs.dry_run == false
+    runs-on: ubuntu-latest
+    environment: crates-io
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: cargo publish
+        run: cargo publish --locked -p harness-lock-core
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}

@@ -6,6 +6,10 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 description = "Python bindings for harness-lock."
+# Built as a Python extension module (pyo3 `extension-module`), so it isn't linkable
+# from Rust. It ships as the `harness-lock` PyPI wheel; only `harness-lock-core` goes
+# to crates.io.
+publish = false
 
 [lib]
 name = "harness_lock"
