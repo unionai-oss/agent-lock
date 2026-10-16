@@ -1,0 +1,22 @@
+[pack]
+name = "harness-package-manager/demo"
+version = "0.1.0"
+license = "Apache-2.0"
+domain = "research-analyst"
+
+[[task]]
+id = "summarize_report"
+prompt = "summarize_report/prompt.md"
+tools = ["python", "filesystem"]
+expected = { artifacts = ["summary.md"] }
+tags = ["writing"]
+timeout-seconds = 600
+
+[[task]]
+id = "clean_csv"
+prompt = "clean_csv/prompt.md"
+fixtures = "clean_csv/workspace/"
+tools = ["python"]
+expected = { artifacts = ["cleaned.csv"] }
+tags = ["data-cleaning"]
+timeout-seconds = 600
