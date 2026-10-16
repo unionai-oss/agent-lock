@@ -24,6 +24,8 @@ pub struct Stack {
     pub retries: u32,
     /// Sampling temperature (recorded; the reference harness is deterministic).
     pub temperature: Option<f64>,
+    /// Per-step tool timeout in seconds (an HPO axis at deeper depths).
+    pub tool_timeout_seconds: Option<u64>,
 }
 
 impl Default for Stack {
@@ -40,6 +42,7 @@ impl Default for Stack {
             max_cost_usd_per_task: None,
             retries: 0,
             temperature: None,
+            tool_timeout_seconds: None,
         }
     }
 }
@@ -62,6 +65,7 @@ impl Stack {
             "max_steps": self.max_steps,
             "retries": self.retries,
             "temperature": self.temperature,
+            "tool_timeout_seconds": self.tool_timeout_seconds,
         })
     }
 
