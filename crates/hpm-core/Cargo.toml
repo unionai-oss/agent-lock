@@ -1,11 +1,16 @@
 [package]
-name = "hpm-core"
+name = "harness-package-manager-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
 description = "Core library for harness-package-manager: manifest, lockfile, store, tuning."
+
+# Code-facing crate name stays `hpm_core` so `use hpm_core::…` is unchanged
+# while the published (crates.io) name is `harness-package-manager-core`.
+[lib]
+name = "hpm_core"
 
 [dependencies]
 serde = { workspace = true }

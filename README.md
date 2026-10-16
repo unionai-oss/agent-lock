@@ -50,8 +50,10 @@ From the Rust side you depend on the crate; from Python you get native bindings.
 pip install harness-package-manager          # or: uv add / uvx
 uv pip install -e .                            # editable dev install (this repo)
 
-# Rust crate  (publish later; locally)
-cargo add hpm-core --path crates/hpm-core
+# Rust crate(s)  (publish later; locally)
+cargo add harness-package-manager --path crates/hpm
+# core library, if you depend on it directly
+cargo add harness-package-manager-core --path crates/hpm-core
 ```
 
 A local editable build needs a Rust toolchain + a Python ≤3.13 interpreter:
@@ -120,7 +122,8 @@ CI/CD publishes on git tags `v*` (and via `workflow_dispatch`):
   Publishing uses [trusted publishing](https://docs.pypi.org/trusted-publishers/) (OIDC) —
   register this GitHub repo as a PyPI publisher for the `pypi` environment — or set a token.
   For test-PyPI publishes, run the workflow with `--pypi test` and set `TEST_PYPI_TOKEN`.
-- **Rust crates** → crates.io as `hpm-core` then `hpm` (`.github/workflows/publish-cargo.yml`).
+- **Rust crates** → crates.io as `harness-package-manager-core` (dependency) then
+  `harness-package-manager` (`.github/workflows/publish-cargo.yml`).
   Set the `CARGO_REGISTRY_TOKEN` secret.
 
 Daily CI (`ci.yml`) runs `cargo test` for the core and `pytest` + `ruff` for the bindings on

@@ -13,8 +13,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Build & test hpm-core
-        run: cargo test -p hpm-core
+      - name: Build & test core
+        run: cargo test -p harness-package-manager-core
 
   python-bindings:
     name: Python bindings (pytest + ruff)
