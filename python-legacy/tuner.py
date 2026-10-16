@@ -1,8 +1,8 @@
-"""The tuner: turns a manifest into an ``hpm.lock``.
+"""The tuner: turns a manifest into an ``harness.lock``.
 
 Search over candidate stacks, run trials, grade, select a winner from the Pareto
 front, and serialize the resolved stack plus evidence. Runs on the local backend by
-default; devbox/cluster delegate to the Flyte pipeline (``al.flyte``).
+default; devbox/cluster delegate to the Flyte pipeline (``hlock.flyte``).
 """
 
 from __future__ import annotations
@@ -13,10 +13,10 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from agent_lock import backends
-from al.adapters import ADAPTERS
-from al.errors import AgentLockError
-from hpm.lockfile import (
+from harness_lock import backends
+from hlock.adapters import ADAPTERS
+from hlock.errors import AgentLockError
+from harness.lockfile import (
     LLM,
     Context,
     Decision,
@@ -30,17 +30,17 @@ from hpm.lockfile import (
     Tool,
     Verify,
 )
-from al.manifest import Manifest
-from al.runcache import TrialCache
-from al.search import Stack, StackScore, TrialResult, select_winner
-from al.store import Store
-from al.tasks import Task, TaskPack
+from hlock.manifest import Manifest
+from hlock.runcache import TrialCache
+from hlock.search import Stack, StackScore, TrialResult, select_winner
+from hlock.store import Store
+from hlock.tasks import Task, TaskPack
 
 
 class Tuner:
     def __init__(self, manifest: Manifest, workdir: Path | None = None) -> None:
         self.manifest = manifest
-        self.workdir = Path(workdir) if workdir else Path(".agentlock")
+        self.workdir = Path(workdir) if workdir else Path(".harnesslock")
         self.store = Store(self.workdir / "store")
         self.run_dir = self.workdir / "runs"
         self.cache = TrialCache(self.workdir / "trial-cache.json")
@@ -104,7 +104,7 @@ class Tuner:
             shutil.rmtree(ws)
         ws.mkdir(parents=True, exist_ok=True)
 
-        from al.traces import TraceRecorder
+        from hlock.traces import TraceRecorder
 
         recorder = TraceRecorder(stack.hash(), task.id, seed)
         adapter = ADAPTERS.get(stack.harness)
@@ -156,7 +156,7 @@ class Tuner:
         if bk.target == "local":
             results = asyncio.run(bk.run_sweep(candidates, self.run_dir, run))
         else:
-            from al.flyte import run_search  # provisional Layer 3
+            from hlock.flyte import run_search  # provisional Layer 3
 
             results = run_search(self, candidates, backend=bk)
 
@@ -168,12 +168,12 @@ class Tuner:
 
         # write the lock
         lock = _build_lockfile(self, winner, scores)
-        lock.save("hpm.lock")
+        lock.save("harness.lock")
         self._write_report(lock, scores)
         return lock
 
     def _write_report(self, lock: Lockfile, scores: list[StackScore]) -> None:
-        lines = ["# agent-lock report", ""]
+        lines = ["# harness-lock report", ""]
         lines.append("## Locked stack")
         lines.append(f"```\n{lock.summary()}\n```")
         lines.append("")
@@ -181,7 +181,7 @@ class Tuner:
         lines.append("")
         lines.append("| harness | llm | decision | success-rate | cost |")
         lines.append("|---|---|---|---|---|")
-        from al.search import pareto_front
+        from hlock.search import pareto_front
 
         for s in pareto_front(scores):
             lines.append(

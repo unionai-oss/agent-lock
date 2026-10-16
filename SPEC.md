@@ -1,20 +1,20 @@
-# agent-lock — Specification (draft v0)
+# harness-lock — Specification (draft v0)
 
 > **Lock your agent into place.**
 > Bring your domain tasks, the models you're allowed to use, and the harness you like.
-> `agent-lock` searches the stack, measures it, and writes an `hpm.lock`: a pinned,
+> `harness-lock` searches the stack, measures it, and writes an `harness.lock`: a pinned,
 > version-controlled, enforceable description of the agent that actually works for your domain.
 
 Status: draft · Owner: Niels Bantilan · Last updated: 2026-10-16
 
 > **Implementation note (rust pivot).** The core is implemented in **Rust**
-> (`crates/agent-lock-core` and the `crates/agent-lock` bindings crate, published
+> (`crates/harness-lock-core` and the `crates/harness-lock` bindings crate, published
 > to crates.io), with **Python bindings** (PyO3) exposing the same Layer 0/1 API
-> (`import agent_lock as al`, CLI `al`) so the user surface stays as specified
+> (`import harness_lock as hlock`, CLI `hlock`) so the user surface stays as specified
 > here. The Rust core stays the orchestrator/aggregator; ecosystem- and
 > GPU-heavy work (real LLM calls, pandas/polars trace loading, synthetic data,
 > grading, prompt search, LoRA) runs in the Python worker
-> (`agent_lock/tasks/worker.py`), which the core drives out-of-process over a
+> (`harness_lock/tasks/worker.py`), which the core drives out-of-process over a
 > versioned JSON contract and which in turn raises each body to a real Flyte
 > task on `devbox`/`cluster` (Python `flyte` / `flyteplugins-rs`;
 > `~/.flyte/config.yaml`). A [flyte-sdk-rs](https://github.com/flyteorg/flyte-sdk-rs)
@@ -25,18 +25,18 @@ Status: draft · Owner: Niels Bantilan · Last updated: 2026-10-16
 
 ## 1. Summary
 
-`agent-lock` is a Python package (plus a family of open-weights models and datasets) that
+`harness-lock` is a Python package (plus a family of open-weights models and datasets) that
 treats an agent system the way a package manager treats dependencies:
 
-| Package manager            | agent-lock                                                        |
+| Package manager            | harness-lock                                                        |
 |----------------------------|-------------------------------------------------------------------|
-| `pyproject.toml`           | `hpm.toml`: the **manifest**. What you allow and require.   |
+| `pyproject.toml`           | `harnesslock.toml`: the **manifest**. What you allow and require.   |
 | dependency resolver        | **tuner**: search over LLMs × decision models × harnesses × policies, scored against domain tasks |
-| `uv.lock` / `Cargo.lock`   | `hpm.lock`: the **lockfile**. Exactly what was chosen, pinned and hashed, plus the evidence for choosing it |
-| `uv sync`                  | `al sync`: materialize the locked stack in an environment |
-| `uv lock --upgrade-package`| `al update <component>`: re-resolve part of the stack and diff the evidence |
-| CI `--locked` check        | `al check` / `al verify`: fail if the running stack drifts from the lock |
-| `uv add` / `uv tree`       | `al add skill …` / `al tree`: add and inspect the stack's dependencies |
+| `uv.lock` / `Cargo.lock`   | `harness.lock`: the **lockfile**. Exactly what was chosen, pinned and hashed, plus the evidence for choosing it |
+| `uv sync`                  | `hlock sync`: materialize the locked stack in an environment |
+| `uv lock --upgrade-package`| `hlock update <component>`: re-resolve part of the stack and diff the evidence |
+| CI `--locked` check        | `hlock check` / `hlock verify`: fail if the running stack drifts from the lock |
+| `uv add` / `uv tree`       | `hlock add skill …` / `hlock tree`: add and inspect the stack's dependencies |
 
 As in a package lock, the stack has **dependencies**, and they are resolved, pinned, and
 hashed like packages. Models and the harness are dependencies, and so are the things the
@@ -55,7 +55,7 @@ zero setup            Docker: UI, durable   concurrent trials, shared cache
 
 Users never see Flyte unless they deliberately go down to the lowest API layer (§9).
 
-**Positioning in one line:** agent-lock is *AutoML for agent systems*, or more precisely a
+**Positioning in one line:** harness-lock is *AutoML for agent systems*, or more precisely a
 *domain agent compiler*. Give it representative tasks, available models, tools, and
 harnesses. It searches the space, evaluates the traces, trains lightweight decision
 policies, and locks the best agent system for your domain.
@@ -96,7 +96,7 @@ The result is agents that degrade silently and can't be rolled back, diffed, or 
   tools actually completes *my* tasks reliably?" Evaluation is moving from static QA toward
   traces, harness changes, and replay loops. Nobody yet ships an artifact that captures the
   answer and keeps it true over time.
-- **Customer signal (Union).** Recurring asks from Union customers that agent-lock addresses
+- **Customer signal (Union).** Recurring asks from Union customers that harness-lock addresses
   directly:
   - Flyte-native agent harnesses with tool calling, MCP, memory, and human-in-the-loop.
   - Hermes and other third-party harness integration with Flyte.
@@ -114,13 +114,13 @@ The result is agents that degrade silently and can't be rolled back, diffed, or 
 
 ### Goals
 
-1. **One sharable artifact.** `hpm.lock` fully describes a tuned agent stack and the
+1. **One sharable artifact.** `harness.lock` fully describes a tuned agent stack and the
    evidence behind it. It is human-readable, diffable in a PR, and machine-enforceable.
 2. **Domain-specific tuning.** Optimize against *your* tasks (a task pack), not a generic
    leaderboard.
 3. **Harness-agnostic.** Pluggable adapters for existing harnesses; no new agent framework
    to learn.
-4. **Runs anywhere.** `pip install agent-lock` and lock on a laptop with no services.
+4. **Runs anywhere.** `pip install harness-lock` and lock on a laptop with no services.
    The same code path scales to a devbox or a cluster by changing one flag.
 5. **Layered devex.** Flyte powers the backend but stays invisible until a user needs to
    customize compute or durability.
@@ -133,7 +133,7 @@ The result is agents that degrade silently and can't be rolled back, diffed, or 
 
 - Building a new general-purpose agent harness. The built-in `reference` harness exists only
   for tests and as a baseline.
-- Hosting inference. agent-lock calls providers or the user's own endpoints.
+- Hosting inference. harness-lock calls providers or the user's own endpoints.
 - Training frontier-scale models. Fine-tuning is limited to small decision/judge models
   and, optionally, LoRA adapters on open-weights LLMs.
 - Guaranteeing bit-exact determinism for closed API models. The lock pins what *can* be
@@ -147,7 +147,7 @@ The result is agents that degrade silently and can't be rolled back, diffed, or 
 |---|---|
 | **Stack** | One concrete agent configuration: LLM assignment(s) + decision model + harness + tools + prompts + policies + runtime. |
 | **Component** | One axis of a stack (e.g. `llm.planner`, `decision.router`, `harness`, `policy.retries`). |
-| **Manifest** (`hpm.toml`) | User-authored constraints: candidate components, task packs, objectives, budget, backend. |
+| **Manifest** (`harnesslock.toml`) | User-authored constraints: candidate components, task packs, objectives, budget, backend. |
 | **Search space** | The set of stacks implied by the manifest's candidates and constraints. |
 | **Task pack** | Versioned set of domain tasks + fixtures + graders. The unit of evaluation. |
 | **Trial** | One `(stack, task, seed)` execution. Produces a trace and grades. |
@@ -155,19 +155,19 @@ The result is agents that degrade silently and can't be rolled back, diffed, or 
 | **Grader** | Scores a trial: deterministic checks, artifact checks, or an LLM/judge model. |
 | **Decision model** | A small model (or rule set) that makes structured choices inside the harness loop: route, retry, escalate, stop, tool choice. |
 | **Tuner** | The search + evaluation + selection engine that turns a manifest into a lock. |
-| **Lock** (`hpm.lock`) | The resolved stack, fully pinned, with hashes, provenance, and evaluation evidence. |
-| **Adapter** | Plugin that teaches agent-lock how to configure, run, trace, and enforce a specific harness. |
+| **Lock** (`harness.lock`) | The resolved stack, fully pinned, with hashes, provenance, and evaluation evidence. |
+| **Adapter** | Plugin that teaches harness-lock how to configure, run, trace, and enforce a specific harness. |
 | **Backend** | Where the tuner executes: `local`, `devbox`, or `cluster`. |
 | **Peripheral** | Anything a harness plugs in besides the model: tools, MCP servers, skills, instruction files, subagents, hooks, commands, plugins, LSP servers, memory, retrieval indexes, etc. (§5.4). |
 | **Component kind** | A typed category of lockable dependency (`skill`, `mcp`, `pydantic-ai.capability`, …) with its own schema, resolver, hasher, materializer, and checker (§5.3, §7.6). |
-| **Portable kind** | A kind defined by agent-lock (or an open standard) that adapters can install into *any* supporting harness, e.g. Agent Skills, MCP servers, `AGENTS.md`. |
+| **Portable kind** | A kind defined by harness-lock (or an open standard) that adapters can install into *any* supporting harness, e.g. Agent Skills, MCP servers, `AGENTS.md`. |
 | **Native kind** | A kind that only exists in one harness, registered by its adapter under a namespace, e.g. `pydantic-ai.capability`, `opencode.plugin`, `pi.extension`, `claude.hook`. |
 | **Bundle** | A component that expands into other components (Claude Code plugin, Pi package, a Pydantic AI capability that brings tools + instructions + hooks). |
 
 ### 4.1 The loop
 
 ```
- hpm.toml ─┐
+ harnesslock.toml ─┐
  task packs ─────┤
                  ▼
           ┌─────────────┐   trials (fan-out)   ┌──────────────┐
@@ -181,15 +181,15 @@ The result is agents that degrade silently and can't be rolled back, diffed, or 
                          (optional) train decision model on traces
                                                       ▼
                                                ┌──────────────┐
-                                               │ select + pin │ ──► hpm.lock
+                                               │ select + pin │ ──► harness.lock
                                                └──────────────┘      + traces/ + report
 ```
 
 ---
 
-## 5. The `hpm.lock` file
+## 5. The `harness.lock` file
 
-`hpm.lock` is the central artifact. It has three jobs:
+`harness.lock` is the central artifact. It has three jobs:
 
 1. **Document.** What the agent is, and the evidence that it works.
 2. **Enforce.** What the runtime must match. `check`, `sync`, and the runtime guard read it.
@@ -198,9 +198,9 @@ The result is agents that degrade silently and can't be rolled back, diffed, or 
 ### 5.1 Format
 
 - **TOML**, generated, deterministic key ordering, stable formatting (so diffs are minimal).
-- Begins with a `# This file is generated by agent-lock. Do not edit by hand.` header.
+- Begins with a `# This file is generated by harness-lock. Do not edit by hand.` header.
 - Large content (prompts, tool schemas, traces, weights) is **referenced by content hash**,
-  never inlined. Blobs live in `.agentlock/store/` (local) or a configured object store,
+  never inlined. Blobs live in `.harnesslock/store/` (local) or a configured object store,
   addressed as `sha256:<digest>`.
 - Secrets are **never** written. Credentials are referenced by name (`env:ANTHROPIC_API_KEY`).
 - `lock-version` is the schema version. Readers must reject unknown major versions.
@@ -208,11 +208,11 @@ The result is agents that degrade silently and can't be rolled back, diffed, or 
 ### 5.2 Example
 
 ```toml
-# This file is generated by agent-lock. Do not edit by hand.
+# This file is generated by harness-lock. Do not edit by hand.
 lock-version = 1
-generated-by = "agent-lock 0.3.0"
+generated-by = "harness-lock 0.3.0"
 generated-at = "2026-10-16T14:02:11Z"
-manifest-hash = "sha256:9f1c…"          # hpm.toml that produced this lock
+manifest-hash = "sha256:9f1c…"          # harnesslock.toml that produced this lock
 
 [stack]
 name = "ml-eng-debugger"
@@ -242,7 +242,7 @@ fingerprint = "sha256:b902…"
 # ---------- Decision model ----------
 [decision]
 kind = "model"                           # model | rules | llm
-model = "hf://agent-lock/decider-1.5b"
+model = "hf://harness-lock/decider-1.5b"
 revision = "3c9e…"
 weights = "sha256:5d1a…"
 adapter = { lora = "store://sha256:8e7f…" }   # tuned on this project's traces
@@ -255,7 +255,7 @@ name = "opencode"
 version = "1.4.2"
 source = "npm:opencode-ai@1.4.2"
 integrity = "sha512-…"
-adapter = "al.adapters.opencode@0.3.0"
+adapter = "hlock.adapters.opencode@0.3.0"
 config = "sha256:2b77…"                  # rendered harness config blob
 system-prompt = "sha256:c41e…"
 pattern = "plan-act-reflect"
@@ -287,7 +287,7 @@ frontmatter = "sha256:0e9d…"             # name, description, compatibility, a
 allowed-tools = "Bash(python:*) Read"    # mapped onto [policy]; anything broader is a lock error
 executes = ["scripts/fill_form.py", "scripts/extract.py"]
 runtime-deps = "sha256:aa7c…"            # pinned pip/npm/system deps baked into the sandbox image
-scan = { tool = "agent-lock-scan@0.2.0", result = "pass", report = "store://sha256:c3f1…" }
+scan = { tool = "harness-lock-scan@0.2.0", result = "pass", report = "store://sha256:c3f1…" }
 install = "native"                       # adapter decides the path (.opencode/skills/, .claude/skills/, …)
 requires = ["tool:python"]               # edges in the dependency graph
 
@@ -358,14 +358,14 @@ retries = 1
 tool-timeout-seconds = 120
 max-steps = 40
 max-cost-usd-per-task = 1.50
-sandbox = { enabled = true, image = "ghcr.io/agent-lock/sandbox-py@sha256:19ab…", network = "egress-allowlist" }
+sandbox = { enabled = true, image = "ghcr.io/harness-lock/sandbox-py@sha256:19ab…", network = "egress-allowlist" }
 human-approval = "on_risky_action"
 risky-actions = ["filesystem.write:/", "github.merge", "shell:rm"]
 tool-allowlist = ["python", "github", "filesystem"]
 
 # ---------- Evaluation evidence ----------
 [[evidence]]
-task-pack = "agent-lock/ml-engineering"
+task-pack = "harness-lock/ml-engineering"
 task-pack-version = "0.2.0"
 task-pack-hash = "sha256:6aa2…"
 split = "holdout"
@@ -384,14 +384,14 @@ cost-usd-per-task = 1.12
 
 # ---------- Drift guards ----------
 [verify]
-canary-tasks = 12                                # subset re-run by `al verify`
+canary-tasks = 12                                # subset re-run by `hlock verify`
 min-success-rate = 0.80                  # fail verify below this
 fingerprint-tolerance = 0.15             # max behavioral distance before warning
 
 # ---------- Provenance ----------
 [provenance]
 backend = "cluster"
-run = "flyte://my-org/agent-lock/development/r8x2k1"
+run = "flyte://my-org/harness-lock/development/r8x2k1"
 search = { strategy = "successive-halving", candidates = 48, trials = 1312, spend-usd = 214.07 }
 ```
 
@@ -413,7 +413,7 @@ envelope:
 | `scope` | Where it applies: the whole stack, one LLM role, one subagent, or one harness. |
 | `enforce` | `pin` (checked and guarded), `record` (provenance only), or `off`. |
 
-Components form a DAG. `al tree` prints it. `update` follows the edges, so updating a
+Components form a DAG. `hlock tree` prints it. `update` follows the edges, so updating a
 bundle re-resolves what it provides, and updating a skill re-checks what requires it.
 
 **Pinning strategies**, chosen per kind:
@@ -492,7 +492,7 @@ Two cross-cutting rules come out of this survey:
 Closed models can't be pinned by weights, and providers sometimes change behavior under a
 fixed model ID. A **fingerprint** is a hash over the model's outputs on a fixed, small
 probe set (fixed prompts, `temperature=0`, structured outputs), plus an embedding summary
-used for a *distance* metric. `al verify` re-probes and reports the distance. Above
+used for a *distance* metric. `hlock verify` re-probes and reports the distance. Above
 `fingerprint-tolerance` it warns; with `--strict` it fails.
 
 Fingerprints are evidence, not a guarantee. The spec says so plainly in the CLI output.
@@ -501,18 +501,18 @@ Fingerprints are evidence, not a guarantee. The spec says so plainly in the CLI 
 
 Enforcement happens at three points:
 
-1. **`al check`** (static, fast, offline-capable). Walks the component graph and
+1. **`hlock check`** (static, fast, offline-capable). Walks the component graph and
    runs each kind's checker. That verifies installed harness, MCP server, plugin, and LSP
    versions and integrity; skill directory and instruction-file digests; rendered config and
-   prompt hashes; the sandbox image digest; context isolation; and that `hpm.toml`
+   prompt hashes; the sandbox image digest; context isolation; and that `harnesslock.toml`
    still hashes to `manifest-hash`. It also flags *undeclared* peripherals: a skill, hook,
    or MCP server present in the harness's config roots that isn't in the lock. Exit codes
    are CI-friendly.
-2. **`al verify`** (dynamic, costs money). Re-runs the canary tasks and fingerprint
+2. **`hlock verify`** (dynamic, costs money). Re-runs the canary tasks and fingerprint
    probes against live providers, and re-reads the advertised schemas of remote MCP
    servers and remote agents. Compares everything to the evidence and thresholds.
 3. **Runtime guard** (in-process, via adapters). When the agent runs through
-   `al run` or `al.runtime.guard(...)`:
+   `hlock run` or `hlock.runtime.guard(...)`:
    - model calls are checked against the locked provider/model/params; mismatch → error,
    - tool and MCP calls are checked against `tool-allowlist`, `permissions`, and the locked
      tool schemas (a server that starts advertising new tools is a violation),
@@ -528,48 +528,48 @@ overridable per command.
 ### 5.7 Updating
 
 ```bash
-al update llm.executor                    # re-resolve one component, keep the rest pinned
-al update harness --to 1.5.0              # try a specific new version
-al update skill:pytorch-debugging         # pull the skill's new revision, re-check dependents
-al update --all                           # full re-resolve
-al diff                                   # component + evidence diff vs. the committed lock
+hlock update llm.executor                    # re-resolve one component, keep the rest pinned
+hlock update harness --to 1.5.0              # try a specific new version
+hlock update skill:pytorch-debugging         # pull the skill's new revision, re-check dependents
+hlock update --all                           # full re-resolve
+hlock diff                                   # component + evidence diff vs. the committed lock
 ```
 
 `update` reuses cached trials for unchanged stacks (thanks to Flyte caching, §8.3), so a
 partial update only pays for new trials. `diff` renders both a structural diff and an
 **evidence diff** ("success-rate 0.87 → 0.89 (+0.02, CI overlaps); cost −31%"), suitable for
-pasting into a PR description. `al diff --format md` produces exactly that.
+pasting into a PR description. `hlock diff --format md` produces exactly that.
 
-### 5.8 Upgrading (`al upgrade`)
+### 5.8 Upgrading (`hlock upgrade`)
 
 `update` (§5.7) stays within a component's declared range and is conservative. `upgrade` is the
 deliberate, governed path for moving a component to a **newer major / breaking version** (or all
 dependent components at once), with a safe undo and a compatibility review gate:
 
 ```bash
-al upgrade                          # plan-only: list upgradeable components + what changes
-al upgrade --all                    # upgrade every locked component that has a newer/breaking version
-al upgrade harness --to 2.0.0       # upgrade one component to a specific target
-al upgrade skill:pytorch-debugging mcp:github --dry-run
-al upgrade --apply                  # perform the upgrade + re-resolve dependents + re-evaluate
-al upgrade --rollback               # restore the previous hpm.lock if the upgrade regressed
+hlock upgrade                          # plan-only: list upgradeable components + what changes
+hlock upgrade --all                    # upgrade every locked component that has a newer/breaking version
+hlock upgrade harness --to 2.0.0       # upgrade one component to a specific target
+hlock upgrade skill:pytorch-debugging mcp:github --dry-run
+hlock upgrade --apply                  # perform the upgrade + re-resolve dependents + re-evaluate
+hlock upgrade --rollback               # restore the previous harness.lock if the upgrade regressed
 ```
 
 Guarantees and behavior:
 
-- **Safe undo.** The previous `hpm.lock` is retained (as `hpm.lock.prev`, or on the working
-  branch) so `--rollback` is one command and every change stays PR-reviewable via `al diff`.
+- **Safe undo.** The previous `harness.lock` is retained (as `harness.lock.prev`, or on the working
+  branch) so `--rollback` is one command and every change stays PR-reviewable via `hlock diff`.
 - **Edge-aware re-resolution.** Re-resolves the component's `requires`/`provides` edges (§5.3):
   upgrading a bundle re-resolves what it provides; upgrading a skill re-checks its dependents.
 - **Cost-controlled re-evaluation.** Runs only the affected components' trials on the
   search/holdout splits (everything else is cached, §8.3) and reports an evidence diff
-  (`al diff --format md`) for the PR description.
+  (`hlock diff --format md`) for the PR description.
 - **Gate.** `upgrade` will not apply unless the new evidence meets `[objective]` constraints
-  (`--force` overrides). `al check` after an upgrade enforces the new lock, and
-  `al verify` re-probes fingerprints (§5.5).
-- **Discovery.** `al outdated` lists the components `upgrade` (or `update`) can move.
+  (`--force` overrides). `hlock check` after an upgrade enforces the new lock, and
+  `hlock verify` re-probes fingerprints (§5.5).
+- **Discovery.** `hlock outdated` lists the components `upgrade` (or `update`) can move.
 
-| | `al update` (§5.7) | `al upgrade` (§5.8) |
+| | `hlock update` (§5.7) | `hlock upgrade` (§5.8) |
 |---|---|---|
 | Scope | within a declared range | across majors / breaking |
 | Default | re-resolve pinned components | plan / gate / apply-rollback |
@@ -577,16 +577,16 @@ Guarantees and behavior:
 
 ### 5.9 The optimization lock (`harness.opt.lock`)
 
-`al optimize` (§8.5) writes a second, *derived* lockfile — `harness.opt.lock` (name is
+`hlock optimize` (§8.5) writes a second, *derived* lockfile — `harness.opt.lock` (name is
 `--out`-renamable) — that records an **optimizer's output** rather than a search's selection.
-It is a superset of the schema-v1 lock (so `al check` / `al verify` work on it) plus
+It is a superset of the schema-v1 lock (so `hlock check` / `hlock verify` work on it) plus
 optimizer-specific tables:
 
 ```toml
-# This file is generated by agent-lock. Do not edit by hand.
+# This file is generated by harness-lock. Do not edit by hand.
 lock-version = 1
-generated-by = "agent-lock 0.4.0 (optimize 1)"
-base-lock = "sha256:9f1c…"          # the hpm.lock it was derived from
+generated-by = "harness-lock 0.4.0 (optimize 1)"
+base-lock = "sha256:9f1c…"          # the harness.lock it was derived from
 kind = "optimized"
 
 [stack]
@@ -609,7 +609,7 @@ best = { retries = 1, temperature = 0.2, "tool-timeout-seconds" = 120 }
 # ---- Fine-tuning (depth >= ft) ----
 [[optimize.finetune]]
 target = "decision"                  # decision model fine-tuned on traces
-base = "hf://agent-lock/decider-1.5b"
+base = "hf://harness-lock/decider-1.5b"
 data = "traces://…"                  # provenance of the fine-tune dataset
 adapter = { lora = "store://sha256:8e7f…" }   # content-addressed LoRA
 samples = 3142
@@ -617,7 +617,7 @@ loss = 0.11
 
 # ---- data provenance ----
 [optimize.data]
-source = "user:./runs"               # or "hub:agent-lock/traces" | "synthetic"
+source = "user:./runs"               # or "hub:harness-lock/traces" | "synthetic"
 mode = "user-traces"            # or "synthetic"
 redact = true
 split = { train = 0.8, val = 0.1, test = 0.1 }
@@ -628,18 +628,18 @@ budget = { "spend-usd" = 18.4, "gpu-h" = 1.2 }
 duration-s = 912
 
 [evidence]                            # re-measured on holdout after optimization
-# … same shape as hpm.lock's evidence
+# … same shape as harness.lock's evidence
 ```
 
-`harness.opt.lock` is **not** a replacement for `hpm.lock` — it is the researched,
+`harness.opt.lock` is **not** a replacement for `harness.lock` — it is the researched,
 higher-performing candidate. It is adopted into the enforceable lock with
-`al lock --from harness.opt.lock` / `al adopt harness.opt.lock` once the team decides to
+`hlock resolve --from harness.opt.lock` / `hlock adopt harness.opt.lock` once the team decides to
 ship it; at that point the optimizer's changes become pinned, enforced behavior with the same
 `check`/`verify`/`run` guarantees as any other locked stack.
 
 ---
 
-## 6. The manifest: `hpm.toml`
+## 6. The manifest: `harnesslock.toml`
 
 User-authored. Declares candidates and constraints; the tuner resolves them into a lock.
 
@@ -648,7 +648,7 @@ User-authored. Declares candidates and constraints; the tuner resolves them into
 name = "ml-eng-debugger"
 
 [tasks]
-packs = ["agent-lock/ml-engineering@^0.2", "./tasks/internal"]   # hub packs + local packs
+packs = ["harness-lock/ml-engineering@^0.2", "./tasks/internal"]   # hub packs + local packs
 splits = { search = 0.7, holdout = 0.3 }
 seeds = 3
 
@@ -660,7 +660,7 @@ any-of = ["anthropic:claude-sonnet-latest", "openai:gpt-5", "vllm:Qwen/Qwen3-32B
 any-of = ["vllm:Qwen/Qwen3-32B", "ollama:qwen3:8b", "same-as:planner"]
 
 [candidates.decision]
-any-of = ["none", "rules:default", "hf://agent-lock/decider-1.5b", "llm:openai:gpt-5-mini"]
+any-of = ["none", "rules:default", "hf://harness-lock/decider-1.5b", "llm:openai:gpt-5-mini"]
 train = "allow"                          # allow tuning a decision model on this project's traces
 
 [candidates.harness]
@@ -757,10 +757,10 @@ Peripherals can also be added from the CLI, which edits the manifest and re-lock
 affected component:
 
 ```bash
-al add skill git+https://github.com/acme/agent-skills#path=skills/pytorch-debugging
-al add mcp npm:@modelcontextprotocol/server-github --permissions read:repo
-al add pydantic-ai.capability pydantic_ai_harness.Planning
-al remove skill pdf
+hlock add skill git+https://github.com/acme/agent-skills#path=skills/pytorch-debugging
+hlock add mcp npm:@modelcontextprotocol/server-github --permissions read:repo
+hlock add pydantic-ai.capability pydantic_ai_harness.Planning
+hlock remove skill pdf
 ```
 
 ---
@@ -773,7 +773,7 @@ A task pack is a directory (or a Hub reference) with a `pack.toml`:
 
 ```toml
 [pack]
-name = "agent-lock/ml-engineering"
+name = "harness-lock/ml-engineering"
 version = "0.2.0"
 license = "Apache-2.0"
 domain = "ml-engineering"
@@ -793,7 +793,7 @@ Grader types:
 
 - `tests:` a Python function `def grade(workspace, trace) -> Grade`. Deterministic, preferred.
 - `artifact:` existence/schema/content checks on outputs.
-- `judge:` a rubric scored by a judge model (default: the open `agent-lock/judge` model,
+- `judge:` a rubric scored by a judge model (default: the open `harness-lock/judge` model,
   §11; any LLM can be configured). Judge prompt and model are pinned in the evidence.
 - `trace:` checks over the trace itself (e.g. "never called `shell` with `rm -rf`",
   "asked for approval before writing outside workspace").
@@ -803,7 +803,7 @@ correctness, tool errors, recoveries, human interventions, safety violations. Ag
 come with bootstrap CIs, plus **determinism** (outcome and trajectory variance across seeds)
 and **replayability** (whether the trial reproduces from its recorded trace, §10.3).
 
-**Bootstrapping a pack.** `al tasks new --from-traces <dir>` turns existing
+**Bootstrapping a pack.** `hlock tasks new --from-traces <dir>` turns existing
 production traces (in the trace schema, or imported from OTel/LangSmith/etc.) into
 draft tasks with draft graders for a human to review. Domain coverage is the biggest
 adoption barrier, so this path matters.
@@ -854,7 +854,7 @@ with a structured-output schema), and `model` (a small classifier/generator, §1
 
 **Tuning a decision model** is a tuner stage: after an initial sweep, successful and failed
 trajectories are labeled (by outcome and by the judge), a LoRA is trained on top of
-`agent-lock/decider`, and the stacks that use it are re-evaluated on the holdout split. The
+`harness-lock/decider`, and the stacks that use it are re-evaluated on the holdout split. The
 resulting adapter is content-addressed and pinned in the lock.
 
 Harnesses differ in where they let you intervene. Each adapter declares which decision
@@ -881,13 +881,13 @@ class HarnessAdapter(Protocol):
         """Execute one task. Emit trace events through `recorder`."""
 
     def check(self, locked: LockedHarness, env: Environment) -> list[Violation]:
-        """Static verification for `al check`."""
+        """Static verification for `hlock check`."""
 ```
 
 How adapters capture traces and enforce the lock:
 
 - **Proxy mode (default for CLI harnesses: OpenCode, Pi, Codex CLI, Claude Code).** The
-  harness is pointed at a local OpenAI/Anthropic-compatible proxy run by agent-lock. The
+  harness is pointed at a local OpenAI/Anthropic-compatible proxy run by harness-lock. The
   proxy records model calls, enforces model/params, injects decision-model hooks, and
   meters cost. MCP traffic goes through an MCP proxy that enforces the allowlist and
   permissions.
@@ -912,9 +912,9 @@ by digest in the lock. Network policy: `none`, `egress-allowlist`, `open`.
 
 Harnesses keep inventing new units of extension: Pydantic AI *capabilities*, OpenCode
 plugins and agent modes, Pi packages and extensions, Claude Code plugins and output styles,
-Codex profiles. agent-lock can't hard-code all of them, so **component kinds are a plugin
+Codex profiles. harness-lock can't hard-code all of them, so **component kinds are a plugin
 point**. Each kind is a small class registered by an adapter, or by a third-party package
-through the `al.component_kinds` entry point:
+through the `hlock.component_kinds` entry point:
 
 ```python
 class ComponentKind(Protocol):
@@ -934,10 +934,10 @@ class ComponentKind(Protocol):
         """Write this component into the harness's config or code."""
 
     def check(self, locked: Resolved, env: Environment) -> list[Violation]:
-        """Static verification for `al check`."""
+        """Static verification for `hlock check`."""
 
     def guard(self) -> RuntimeGuard | None:
-        """Optional runtime enforcement hook for `al run`."""
+        """Optional runtime enforcement hook for `hlock run`."""
 ```
 
 Because the lock schema is generic (`[[native]] kind = "…"`, §5.2) and each kind brings its
@@ -1038,7 +1038,7 @@ Skill is a directory with a `SKILL.md` (YAML frontmatter with a required `name` 
 `allowed-tools`) and optional `scripts/`, `references/`, and `assets/`. Harnesses load skills
 progressively: every skill's name and description at startup, the body on activation, and
 resources on demand. The format is an open standard (agentskills.io) read by Claude, Codex,
-OpenCode, Pi, VS Code, Cursor, Gemini CLI, Goose, and others, so it's agent-lock's main
+OpenCode, Pi, VS Code, Cursor, Gemini CLI, Goose, and others, so it's harness-lock's main
 **portable** peripheral.
 
 #### 7.7.1 Where skills come from
@@ -1051,7 +1051,7 @@ OpenCode, Pi, VS Code, Cursor, Gemini CLI, Goose, and others, so it's agent-lock
 | **Harness built-ins** | Codex `.system` skills (skill-installer, skill-creator, …); skills baked into a harness release | the harness itself | harness version + each built-in's digest + explicit enabled/disabled |
 | **First-party, in-repo** | `./skills/…`, `.agents/skills/`, `.claude/skills/` committed with the project | `path:` | tree digest; optionally `editable` |
 | **First-party, org-shared** | private monorepo of company skills, internal registry, OCI artifacts | `git+ssh`, `oci://`, private registry | commit/tag or image digest + tree digest + optional signature |
-| **Personal (user-level)** | `~/.claude/skills`, `~/.agents/skills`, `~/.codex/skills` | user's machine | nothing: excluded by `isolation = "locked-only"`. `al skills import --from-user` copies chosen ones into the manifest as first-party skills |
+| **Personal (user-level)** | `~/.claude/skills`, `~/.agents/skills`, `~/.codex/skills` | user's machine | nothing: excluded by `isolation = "locked-only"`. `hlock skills import --from-user` copies chosen ones into the manifest as first-party skills |
 | **Generated** | skills written by `skill-creator`-style tools or proposed by the tuner (open question 9) | `store://` | digest + the run that produced it |
 
 #### 7.7.2 Source syntax
@@ -1079,7 +1079,7 @@ On top of the common envelope (§5.3), a `[[skill]]` entry carries:
 - `origin`: `third-party` | `first-party` | `bundled` | `harness-builtin` | `generated`.
 - `registry`: where it was discovered, if anywhere (provenance only).
 - `frontmatter`: hash of the parsed frontmatter, with `license`, `compatibility`, and
-  `allowed-tools` inlined for review. `al lock` validates frontmatter against the spec (the
+  `allowed-tools` inlined for review. `hlock resolve` validates frontmatter against the spec (the
   same rules as the `skills-ref validate` reference validator): name format, the name matching
   its directory, and length limits.
 - `allowed-tools`: inlined and checked against `[policy]`. A skill can never widen what the
@@ -1098,11 +1098,11 @@ On top of the common envelope (§5.3), a `[[skill]]` entry carries:
 Teams iterate on their own skills constantly, so a strict "any edit fails `check`" rule would
 be miserable. First-party `path:` skills can be marked `editable = true`, like `pip install -e`:
 
-- `al check` passes but reports **stale evidence** when the skill's current digest differs
+- `hlock check` passes but reports **stale evidence** when the skill's current digest differs
   from `evidence-digest`. With `--strict` (for release branches), it fails.
-- `al lock --refresh skill:flyte-sdk` re-measures only the trials affected by that skill.
+- `hlock resolve --refresh skill:flyte-sdk` re-measures only the trials affected by that skill.
   Thanks to trial caching (§8.3), everything else is reused.
-- `al diff` shows the skill's content diff next to the evidence diff, so a PR that edits a
+- `hlock diff` shows the skill's content diff next to the evidence diff, so a PR that edits a
   skill shows whether it helped.
 - Non-editable first-party skills (e.g. released from an org repo by tag) behave like
   third-party ones.
@@ -1115,18 +1115,18 @@ pinned harness version ships, records each one's digest, and requires the manife
 enable or disable it (`[skills.builtin]`; the default is *disabled*, so behavior never
 depends on something undeclared). Skills inside plugins or packages are expanded and locked
 individually (`origin = "bundled"`), so a plugin update that quietly changes one skill shows
-up in `al diff`.
+up in `hlock diff`.
 
 #### 7.7.6 Interop with existing skill tooling
 
 - **`npx skills` (skills.sh CLI).** It already writes a project `skills-lock.json` and a
-  user-level `~/.agents/.skill-lock.json`. `al skills import skills-lock.json` turns an
-  existing setup into manifest entries. `al sync` can also write a compatible
-  `skills-lock.json`, so teammates using `npx skills` see the same set. `hpm.lock` stays
+  user-level `~/.agents/.skill-lock.json`. `hlock skills import skills-lock.json` turns an
+  existing setup into manifest entries. `hlock sync` can also write a compatible
+  `skills-lock.json`, so teammates using `npx skills` see the same set. `harness.lock` stays
   the source of truth because it also carries digests, trust, and evidence.
 - **Harness installers** (Codex's `$skill-installer`, Claude plugin marketplaces). Skills
   installed this way land in config roots that `check` scans, and they're reported as
-  undeclared until added with `al add skill` or `al skills adopt`.
+  undeclared until added with `hlock add skill` or `hlock skills adopt`.
 - **Install targets.** Each adapter maps the portable skill onto its harness's directory
   convention (`.claude/skills/`, `.opencode/…`, `.agents/skills/`, `.codex/skills/`, …). The
   same locked skill installs into any harness the tuner picks.
@@ -1135,7 +1135,7 @@ up in `al diff`.
 
 - **Activation is traced.** Adapters emit `skill.load` (metadata), `skill.activate` (body
   read), and `skill.resource` (script run or reference read) events (§10.1). Evidence
-  therefore shows which skills were actually used, and `al skills unused` lists skills that
+  therefore shows which skills were actually used, and `hlock skills unused` lists skills that
   never activated on the holdout split, which are candidates for removal.
 - **Skill count is a cost.** Every installed skill spends startup context on its metadata
   and competes for selection. The lock records total metadata tokens, and `optional` skills
@@ -1148,7 +1148,7 @@ up in `al diff`.
 Skills are instructions *and* executable code, from an ecosystem of tens of thousands of
 mostly unreviewed repos. Published research has already documented malicious skills in
 public registries, and cross-skill composition attacks that evade per-skill scanners.
-agent-lock therefore:
+harness-lock therefore:
 
 - pins by commit + tree digest, never by name alone, and treats registries as discovery
   rather than trust;
@@ -1163,7 +1163,7 @@ agent-lock therefore:
 - includes safety graders in official task packs that try to trigger skill-borne injection,
   so a stack whose skills make it unsafe can't win.
 
-The scanner is pluggable (`al skills scan --scanner …`). The built-in one is a baseline, not
+The scanner is pluggable (`hlock skills scan --scanner …`). The built-in one is a baseline, not
 a guarantee.
 
 ---
@@ -1176,17 +1176,17 @@ Every backend runs **the same Flyte 2 program**. Local mode is Flyte's local exe
 not a separate code path. That gives us one implementation of retries, caching,
 checkpointing, and fan-out, and makes "move up the dial" a config change, not a port.
 
-`flyte` is a hard dependency of `agent-lock`. It's a pure-Python install and needs no
+`flyte` is a hard dependency of `harness-lock`. It's a pure-Python install and needs no
 services for local mode.
 
 ### 8.2 The dial
 
 | | `local` | `devbox` | `cluster` (Flyte or Union) |
 |---|---|---|---|
-| Setup | none | Docker; `al backend up` wraps `flyte start devbox` | existing cluster + `flyte create config` / config file |
+| Setup | none | Docker; `hlock backend up` wraps `flyte start devbox` | existing cluster + `flyte create config` / config file |
 | Where trials run | this Python process (async, bounded concurrency) | containers on the local Flyte devbox | pods on the cluster |
 | Durability | local SQLite cache; resume after crash re-uses cached trials | durable run state, object store, survives restarts | durable, shared across users |
-| Observability | terminal UI (`--tui`), local reports, `.agentlock/runs/` | Flyte UI at localhost | Flyte/Union UI, shared |
+| Observability | terminal UI (`--tui`), local reports, `.harnesslock/runs/` | Flyte UI at localhost | Flyte/Union UI, shared |
 | Parallelism | ~4–16 concurrent trials | bounded by the laptop | hundreds–thousands of trials |
 | GPUs | whatever the machine has | `flyte start devbox --gpu` on a CUDA host | GPU node pools: serve open-weights LLMs, train decision models |
 | Cache sharing | per machine | per machine | per org/project: teammates reuse each other's trials |
@@ -1195,15 +1195,15 @@ services for local mode.
 Switching:
 
 ```bash
-al lock                                  # local (default)
-al backend up                            # starts a devbox (flyte start devbox) and writes config
-al lock --backend devbox
-al lock --backend cluster                # uses ~/.flyte/config.yaml or [backend] in manifest
+hlock resolve                                  # local (default)
+hlock backend up                            # starts a devbox (flyte start devbox) and writes config
+hlock resolve --backend devbox
+hlock resolve --backend cluster                # uses ~/.flyte/config.yaml or [backend] in manifest
 ```
 
 Under the hood, `--backend local` maps to Flyte local run mode; `devbox` and `cluster` call
 `flyte.init(...)` / `flyte.init_from_config(...)` with the corresponding endpoint and then
-`flyte.run(...)` the tuning pipeline. agent-lock owns image building for the trial
+`flyte.run(...)` the tuning pipeline. harness-lock owns image building for the trial
 environment (`flyte.Image`), so users don't write Dockerfiles.
 
 ### 8.3 How durability maps onto the tuning pipeline
@@ -1226,7 +1226,7 @@ lock_pipeline(manifest)                         @env.task
 ├── train_decision_model(traces)  [optional]   @gpu_env.task  cache
 ├── evaluate_holdout(finalists)                fan-out of run_trial
 ├── fingerprint(finalist LLMs)                 @env.task
-└── write_lock(winner, evidence)               @env.task → hpm.lock + store blobs
+└── write_resolve(winner, evidence)               @env.task → harness.lock + store blobs
 ```
 
 Durability properties this gives us:
@@ -1264,7 +1264,7 @@ Durability properties this gives us:
 Strategies are pure Python behind a `Strategy` protocol (§9.2), so they're usable without
 knowing Flyte.
 
-### 8.5 Optimization pipeline (`al optimize`)
+### 8.5 Optimization pipeline (`hlock optimize`)
 
 `optimize` is the compute-heavy step: instead of *selecting* among given components (the tuner,
 §4.1), it *produces* improvements to the harness — prompt tuning, hyperparameter optimization,
@@ -1274,19 +1274,19 @@ between `grade_trials` and `select`, so all durability properties (caching, resu
 lineage, fan-out) apply. On `local` it is the same in-process path.
 
 ```
-al optimize [flags]  →  harness.opt.lock  (+ report + store blobs)
+hlock optimize [flags]  →  harness.opt.lock  (+ report + store blobs)
 ```
 
 **Depth of optimization** (`--depth`, defaults to `auto`). The user chooses how deep to go;
 each level is a superset of the previous:
 
 ```bash
-al optimize --depth probe        # cheap prompt/policy probes (minutes, no retrain)
-al optimize --depth prompt       # + system-prompt & instructions search (applied as new digests)
-al optimize --depth hpo          # + hyperparameter optimization (retries, temps, timeouts, context…)
-al optimize --depth ft           # + fine-tune small decision/judge/LLMs (LoRA) on the chosen data
-al optimize --depth full         # + workflow compilation + end-to-end holdout re-validation
-al optimize --depth auto         # pick the deepest level the budget allows
+hlock optimize --depth probe        # cheap prompt/policy probes (minutes, no retrain)
+hlock optimize --depth prompt       # + system-prompt & instructions search (applied as new digests)
+hlock optimize --depth hpo          # + hyperparameter optimization (retries, temps, timeouts, context…)
+hlock optimize --depth ft           # + fine-tune small decision/judge/LLMs (LoRA) on the chosen data
+hlock optimize --depth full         # + workflow compilation + end-to-end holdout re-validation
+hlock optimize --depth auto         # pick the deepest level the budget allows
 ```
 
 **Data source** (`--data`). Optimization is driven by real behavior where possible and
@@ -1297,8 +1297,8 @@ synthetic data where not:
   (`config_roots`, §7.4; trace store, §10):
   - proxy-instrumented CLI harnesses: `~/.config/opencode/…`, `~/.pi/…`, `~/.claude/…`, `~/.codex/…`
   - Flyte-backed harnesses: runs under `flyte://org/project/domain`
-  - explicit: `--data user:./runs,agentlock-traces.jsonl` or `al traces export` output
-  - a hub pack: `--data hub:agent-lock/traces`
+  - explicit: `--data user:./runs,harnesslock-traces.jsonl` or `hlock traces export` output
+  - a hub pack: `--data hub:harness-lock/traces`
 - **Synthetic** — `--data synthetic[:<n>]`: generates tasks from the task pack (failure
   seeding, tool-error recovery, prompt-injection attempts) plus optional LLM-authored
   variants to cover the space real traces under-sample.
@@ -1306,18 +1306,18 @@ synthetic data where not:
 **Flags & subcommands** (options are composable):
 
 ```bash
-al optimize --harness opencode      # restrict to one harness
-al optimize --prompt-only           # only pitch prompt/instructions changes (no training)
-al optimize --no-finetune           # skip GPU fine-tuning
-al optimize --axes retries,temperature,tool-timeout-seconds
-al optimize --max-steps 60 --max-tokens 2000
-al optimize --out harness.opt.lock  # default filename — user-renamable
-al optimize --budget spend-usd=50,gpu-h=1,max-trials=1000
-al optimize --strict                # fail unless the opt lock beats the base on [objective]
-al optimize --apply                 # also adopt the result into hpm.lock
-al optimize diff                    # optimizer changes vs: base (evidence + content)
-al optimize reuse-traces --dir …    # point at an exact trace directory
-al optimize dry-run                 # print plan + cost estimate, run nothing
+hlock optimize --harness opencode      # restrict to one harness
+hlock optimize --prompt-only           # only pitch prompt/instructions changes (no training)
+hlock optimize --no-finetune           # skip GPU fine-tuning
+hlock optimize --axes retries,temperature,tool-timeout-seconds
+hlock optimize --max-steps 60 --max-tokens 2000
+hlock optimize --out harness.opt.lock  # default filename — user-renamable
+hlock optimize --budget spend-usd=50,gpu-h=1,max-trials=1000
+hlock optimize --strict                # fail unless the opt lock beats the base on [objective]
+hlock optimize --apply                 # also adopt the result into harness.lock
+hlock optimize diff                    # optimizer changes vs: base (evidence + content)
+hlock optimize reuse-traces --dir …    # point at an exact trace directory
+hlock optimize dry-run                 # print plan + cost estimate, run nothing
 ```
 
 **Evaluation discipline.** `optimize` re-runs the optimized stack against the **holdout** split
@@ -1336,51 +1336,51 @@ The rule: **each layer down exposes more control and requires more knowledge. Fl
 only at Layer 3.** Layers 0–2 import nothing from `flyte` in user code.
 
 ```
-Layer 0  CLI + hpm.toml             "I have tasks and API keys"
-Layer 1  Python API (al)          "I want to script and embed this"
+Layer 0  CLI + harnesslock.toml             "I have tasks and API keys"
+Layer 1  Python API (hlock)          "I want to script and embed this"
 Layer 2  Extension points + profiles      "I need custom graders/strategies/adapters/resources"
-Layer 3  Flyte-native (al.flyte)  "I'm composing this into my own Flyte pipelines/infra"
+Layer 3  Flyte-native (hlock.flyte)  "I'm composing this into my own Flyte pipelines/infra"
 ```
 
 ### 9.1 Layer 0: CLI
 
-The package is `agent-lock`, and its command is **`al`**, matching the Python import
-convention `import agent_lock as al`. A long-form `agent-lock` alias is installed too, for
-scripts and for environments where `al` is already taken.
+The package is `harness-lock`, and its command is **`hlock`**, matching the Python import
+convention `import harness_lock as hlock`. A long-form `harness-lock` alias is installed too, for
+scripts and for environments where `hlock` is already taken.
 
 ```bash
-pip install agent-lock
-al init                               # interactive: pick a pack, providers, harness → hpm.toml
-al lock                               # tune → hpm.lock (+ .agentlock/report.html)
-al show                               # pretty-print the lock + evidence
-al tree                               # component dependency graph (models, harness, skills, MCP, capabilities, …)
-al add|remove <kind> <src>            # add/remove a peripheral (skill, mcp, tool, native kind) and re-lock it
-al sync                               # install/pin harness, peripherals, sandbox image, adapters
-al run "fix the failing test in ./repo"             # run the locked agent with runtime guard
-al check                              # static lock verification (CI)
-al verify                             # canary + fingerprint re-check (scheduled CI)
-al update <component>|--all           # partial/full re-resolve (within range, §5.7)
-al upgrade [component…|--all] [--dry-run] [--apply|--rollback] [--to <version>]   # major/breaking, undoable (§5.8)
-al diff [--format md]                 # structural + evidence diff vs. committed lock
-al optimize [--depth probe|prompt|hpo|ft|full|auto] [--data user|synthetic[:n]|hub:…|user:<paths>] [--out NAME] [--strict] (see §8.5)
+pip install harness-lock
+hlock init                               # interactive: pick a pack, providers, harness → harnesslock.toml
+hlock resolve                               # tune → harness.lock (+ .harnesslock/report.html)
+hlock show                               # pretty-print the lock + evidence
+hlock tree                               # component dependency graph (models, harness, skills, MCP, capabilities, …)
+hlock add|remove <kind> <src>            # add/remove a peripheral (skill, mcp, tool, native kind) and re-lock it
+hlock sync                               # install/pin harness, peripherals, sandbox image, adapters
+hlock run "fix the failing test in ./repo"             # run the locked agent with runtime guard
+hlock check                              # static lock verification (CI)
+hlock verify                             # canary + fingerprint re-check (scheduled CI)
+hlock update <component>|--all           # partial/full re-resolve (within range, §5.7)
+hlock upgrade [component…|--all] [--dry-run] [--apply|--rollback] [--to <version>]   # major/breaking, undoable (§5.8)
+hlock diff [--format md]                 # structural + evidence diff vs. committed lock
+hlock optimize [--depth probe|prompt|hpo|ft|full|auto] [--data user|synthetic[:n]|hub:…|user:<paths>] [--out NAME] [--strict] (see §8.5)
                                        # optimize the harness -> harness.opt.lock
-al export --format docker|flyte|langgraph           # emit a deployable bundle for the locked stack
-al leaderboard [--pack <name>]                      # ranked stacks from the last search (Pareto front)
-al outdated                           # locked peripherals (skills, MCP, plugins, harness) with newer upstream versions
-al skills import|adopt|scan|unused    # import skills-lock.json or user skills, adopt undeclared, scan, find unused
-al tasks new|validate|pull|push
-al traces ls|show|export              # browse traces; export as HF dataset
-al traces replay <trial>              # re-run a trial from its recorded trace (§10.3)
-al traces explain <trial>             # failure triage via agent-lock/triage (§11)
-al backend up|down|status             # devbox lifecycle (wraps flyte start/stop/get devbox)
+hlock export --format docker|flyte|langgraph           # emit a deployable bundle for the locked stack
+hlock leaderboard [--pack <name>]                      # ranked stacks from the last search (Pareto front)
+hlock outdated                           # locked peripherals (skills, MCP, plugins, harness) with newer upstream versions
+hlock skills import|adopt|scan|unused    # import skills-lock.json or user skills, adopt undeclared, scan, find unused
+hlock tasks new|validate|pull|push
+hlock traces ls|show|export              # browse traces; export as HF dataset
+hlock traces replay <trial>              # re-run a trial from its recorded trace (§10.3)
+hlock traces explain <trial>             # failure triage via harness-lock/triage (§11)
+hlock backend up|down|status             # devbox lifecycle (wraps flyte start/stop/get devbox)
 ```
 
-`export` turns the lock into something deployable outside agent-lock, so the result is
+`export` turns the lock into something deployable outside harness-lock, so the result is
 an installable domain agent system and not only a leaderboard:
 
 ```
 dist/
-  hpm.lock            # copied verbatim; the source of truth
+  harness.lock            # copied verbatim; the source of truth
   agent.yaml            # harness-native config rendered from the lock
   policy.yaml           # runtime policies for the guard
   eval_report.md        # evidence, leaderboard, and baseline comparison
@@ -1393,57 +1393,57 @@ dist/
 ### 9.2 Layer 1: Python API
 
 ```python
-import agent_lock as al
+import harness_lock as hlock
 
-manifest = al.Manifest.load("hpm.toml")
-lock = hpm.lock(manifest, backend="local")       # returns al.Lock; writes hpm.lock
+manifest = hlock.Manifest.load("harnesslock.toml")
+lock = harness.lock(manifest, backend="local")       # returns hlock.Lock; writes harness.lock
 print(lock.evidence.summary())
 
 # Programmatic manifest
-space = al.SearchSpace(
+space = hlock.SearchSpace(
     llm={"planner": ["anthropic:claude-sonnet-latest", "vllm:Qwen/Qwen3-32B"]},
-    decision=["none", "hf://agent-lock/decider-1.5b"],
+    decision=["none", "hf://harness-lock/decider-1.5b"],
     harness=["opencode", "pi"],
     policy={"retries": [0, 1]},
 )
-lock = hpm.lock(
+lock = harness.lock(
     space,
-    tasks=al.TaskPack.pull("agent-lock/data-cleaning"),
-    objective=al.Objective(primary="success-rate", select="min-cost",
+    tasks=hlock.TaskPack.pull("harness-lock/data-cleaning"),
+    objective=hlock.Objective(primary="success-rate", select="min-cost",
                            constraints={"success-rate": ">=0.8"}),
-    budget=al.Budget(max_spend_usd=50),
+    budget=hlock.Budget(max_spend_usd=50),
     backend="devbox",
 )
 
 # Use the lock at runtime
-agent = al.load("hpm.lock")
+agent = hlock.load("harness.lock")
 result = await agent.run("Clean ./data/orders.csv and report anomalies")
 ```
 
-`hpm.lock(...)` returns a handle that can be awaited, watched (`.stream()` yields trial
-events), or detached on devbox/cluster (`.url`, `al.attach(url)`).
+`harness.lock(...)` returns a handle that can be awaited, watched (`.stream()` yields trial
+events), or detached on devbox/cluster (`.url`, `hlock.attach(url)`).
 
 ### 9.3 Layer 2: Extension points and profiles
 
-Still no Flyte imports. Users plug in Python objects that agent-lock schedules for them.
+Still no Flyte imports. Users plug in Python objects that harness-lock schedules for them.
 
 ```python
-@al.grader("revenue_matches")
-def revenue_matches(workspace: al.Workspace, trace: al.Trace) -> al.Grade:
+@hlock.grader("revenue_matches")
+def revenue_matches(workspace: hlock.Workspace, trace: hlock.Trace) -> hlock.Grade:
     got = float(workspace.read("answer.txt"))
-    return al.Grade(success=abs(got - 1_204_331.17) < 0.01)
+    return hlock.Grade(success=abs(got - 1_204_331.17) < 0.01)
 
-class MyStrategy(al.Strategy):
-    def propose(self, history: al.History, budget: al.BudgetState) -> list[al.Stack]: ...
+class MyStrategy(hlock.Strategy):
+    def propose(self, history: hlock.History, budget: hlock.BudgetState) -> list[hlock.Stack]: ...
 
-@al.adapter("my-harness")
-class MyHarness(al.HarnessAdapter): ...
+@hlock.adapter("my-harness")
+class MyHarness(hlock.HarnessAdapter): ...
 
-@al.component_kind("my-harness.middleware")       # new lockable peripheral kind (§7.6)
-class Middleware(al.ComponentKind): ...
+@hlock.component_kind("my-harness.middleware")       # new lockable peripheral kind (§7.6)
+class Middleware(hlock.ComponentKind): ...
 ```
 
-**Profiles** describe compute and durability in agent-lock terms, mapped to Flyte by the
+**Profiles** describe compute and durability in harness-lock terms, mapped to Flyte by the
 backend:
 
 ```toml
@@ -1456,8 +1456,8 @@ serve = { gpu = "H100:2", engine = "vllm" }      # for open-weights candidates
 ```
 
 ```python
-hpm.lock(manifest, backend="cluster",
-        profile=al.Profile(trial=al.Resources(cpu=2, memory="4Gi", concurrency=64)))
+harness.lock(manifest, backend="cluster",
+        profile=hlock.Profile(trial=hlock.Resources(cpu=2, memory="4Gi", concurrency=64)))
 ```
 
 Profiles are ignored where they don't apply (e.g. resource requests in local mode), matching
@@ -1471,9 +1471,9 @@ expected.
 
 ```python
 import flyte
-from al.flyte import envs, tasks
+from hlock.flyte import envs, tasks
 
-# Reuse and customize agent-lock's TaskEnvironments
+# Reuse and customize harness-lock's TaskEnvironments
 trial_env = envs.trial.clone_with(
     name="acme_trials",
     image=envs.trial.image.with_pip_packages("acme-internal-tools"),
@@ -1489,17 +1489,17 @@ async def nightly_relock(manifest_path: str) -> str:
     manifest = await tasks.load_manifest(manifest_path)
     resolved = await tasks.resolve_components(manifest)
     results = await tasks.run_search(resolved, trial_env=trial_env)   # same pipeline, custom env
-    lock = await tasks.write_lock(results)
-    await open_pr_with_lock(lock)                                       # user's own task
+    lock = await tasks.write_resolve(results)
+    await open_pr_with_resolve(lock)                                       # user's own task
     return lock.hash
 
 if __name__ == "__main__":
     flyte.init_from_config()
-    run = flyte.run(nightly_relock, manifest_path="s3://acme/agents/hpm.toml")
+    run = flyte.run(nightly_relock, manifest_path="s3://acme/agents/harnesslock.toml")
     print(run.url)
 ```
 
-Layer 3 surface (`al.flyte`):
+Layer 3 surface (`hlock.flyte`):
 
 - `envs`: `core`, `trial`, `grade`, `train`, `serve`, as `flyte.TaskEnvironment`s.
 - `tasks`: every pipeline stage in §8.3, individually importable and composable.
@@ -1516,7 +1516,7 @@ Flyte 2 version.
 
 ### 10.1 Trace schema
 
-Built on the OpenTelemetry GenAI semantic conventions, with agent-lock extensions, so traces
+Built on the OpenTelemetry GenAI semantic conventions, with harness-lock extensions, so traces
 can be exported to any OTel backend and imported from OTel-instrumented agents.
 
 ```json
@@ -1527,7 +1527,7 @@ can be exported to any OTel backend and imported from OTel-instrumented agents.
     { "type": "llm.call", "role": "planner", "model": "claude-sonnet-5-5",
       "input_ref": "sha256:…", "output_ref": "sha256:…",
       "usage": { "input_tokens": 4120, "output_tokens": 611 }, "cost_usd": 0.021, "latency_ms": 2310 },
-    { "type": "decision", "kind": "retry", "model": "agent-lock/decider-1.5b",
+    { "type": "decision", "kind": "retry", "model": "harness-lock/decider-1.5b",
       "choice": "modify_and_retry", "confidence": 0.81 },
     { "type": "tool.call", "tool": "python", "input_ref": "sha256:…", "output_ref": "sha256:…",
       "status": "error", "error_class": "ModuleNotFoundError", "latency_ms": 840 },
@@ -1541,7 +1541,7 @@ can be exported to any OTel backend and imported from OTel-instrumented agents.
 ```
 
 Payloads are content-addressed and stored separately so traces stay small and shareable,
-and payloads can be redacted without breaking structure (`al traces export --redact`).
+and payloads can be redacted without breaking structure (`hlock traces export --redact`).
 
 The trace layer is designed to stand on its own ("OpenTelemetry for agent traces"): the
 schema, recorder, and replay are usable without the tuner, so teams can adopt tracing first
@@ -1549,13 +1549,13 @@ and tuning later.
 
 ### 10.2 Public datasets (Hugging Face)
 
-- `agent-lock/traces`: traces from tuning runs over the official packs, across many
+- `harness-lock/traces`: traces from tuning runs over the official packs, across many
   stacks. Successes and failures, with grades. The training corpus for §11.
-- `agent-lock/failures`: failed trajectories labeled with failure class and the recovery
+- `harness-lock/failures`: failed trajectories labeled with failure class and the recovery
   step that worked in a sibling trial.
-- `agent-lock/tasks-*`: the official task packs (holdout splits withheld).
+- `harness-lock/tasks-*`: the official task packs (holdout splits withheld).
 
-Users opt in to contributing traces (`al traces push --public`) with a mandatory
+Users opt in to contributing traces (`hlock traces push --public`) with a mandatory
 redaction pass. Nothing is uploaded by default.
 
 The trace corpus is likely the most defensible long-term asset: it trains §11's models and
@@ -1563,7 +1563,7 @@ seeds new task packs.
 
 ### 10.3 Replay
 
-`al traces replay <trial>` re-executes a trial using its recorded trace:
+`hlock traces replay <trial>` re-executes a trial using its recorded trace:
 
 - `--mode exact` serves every model and tool response from the trace. This checks
   harness/adapter determinism and is free.
@@ -1579,19 +1579,19 @@ it reads the trace store.
 ## 11. Open-weights models
 
 Small, narrow, permissively licensed (Apache-2.0), released on Hugging Face under
-`agent-lock/`, fine-tuned from a permissively licensed small open base model.
+`harness-lock/`, fine-tuned from a permissively licensed small open base model.
 
 | Model | Size (target) | Job | Used by |
 |---|---|---|---|
-| `agent-lock/decider` | ~0.5B and ~1.5B | Structured decisions: route / retry / escalate / stop / tool | `[decision]` in locks; base for per-project LoRA tuning |
-| `agent-lock/judge` | ~7–8B | Rubric grading of trajectories and artifacts, calibrated to human labels | `judge:` graders (default) |
-| `agent-lock/triage` | ~1.5B | Classify a failed trace: model vs. harness vs. tool vs. task-spec failure; suggest the fix | `al traces explain`, tuner analysis |
+| `harness-lock/decider` | ~0.5B and ~1.5B | Structured decisions: route / retry / escalate / stop / tool | `[decision]` in locks; base for per-project LoRA tuning |
+| `harness-lock/judge` | ~7–8B | Rubric grading of trajectories and artifacts, calibrated to human labels | `judge:` graders (default) |
+| `harness-lock/triage` | ~1.5B | Classify a failed trace: model vs. harness vs. tool vs. task-spec failure; suggest the fix | `hlock traces explain`, tuner analysis |
 
 Design requirements:
 
 - Each runs on CPU (decider) or one consumer GPU (judge), so `local` mode can use them.
 - Each ships with a model card, eval results on held-out packs, and the exact training
-  recipe as an agent-lock/Flyte pipeline (`al train decider …`), so anyone can
+  recipe as an harness-lock/Flyte pipeline (`hlock train decider …`), so anyone can
   reproduce or retrain on their own traces.
 - The judge is calibrated against human-labeled grades. Calibration error is reported, and
   the lock records which judge produced the evidence.
@@ -1634,11 +1634,11 @@ assistant" is neither defensible nor useful here.
 ## 13. Package layout
 
 ```
-al/
+hlock/
   __init__.py            # Layer 1: lock(), load(), Manifest, SearchSpace, Objective, Budget, …
   cli/                   # Layer 0
-  manifest/              # hpm.toml parsing, validation, hashing
-  lockfile/              # hpm.lock schema, (de)serialization, diff, check
+  manifest/              # harnesslock.toml parsing, validation, hashing
+  lockfile/              # harness.lock schema, (de)serialization, diff, check
   store/                 # content-addressed blob store (local dir, s3/gcs/azure via fsspec)
   tasks/                 # task packs, graders, splits, Hub client
   providers/             # LLM providers, alias resolution, pricing, fingerprints, serving
@@ -1655,20 +1655,20 @@ al/
   backends/              # Layer 2: Profile/Resources → Flyte mapping; local/devbox/cluster
   flyte/                 # Layer 3: envs, tasks, images (the tuning pipeline)
 examples/
-  research-agent/        # hpm.toml + committed hpm.lock for each example
+  research-agent/        # harnesslock.toml + committed harness.lock for each example
   data-analysis-agent/
   code-execution-agent/
 ```
 
-Install extras: `agent-lock[vllm]`, `agent-lock[train]`, `agent-lock[docker]`,
-`agent-lock[all]`. Python ≥ 3.10. Works on macOS, Linux, and Windows (WSL for docker sandbox).
+Install extras: `harness-lock[vllm]`, `harness-lock[train]`, `harness-lock[docker]`,
+`harness-lock[all]`. Python ≥ 3.10. Works on macOS, Linux, and Windows (WSL for docker sandbox).
 
 ---
 
 ## 14. Roadmap
 
 **v0.1: "first lock in 10 minutes"** (local only)
-- `init`, `lock`, `show`, `check`, `run` · `hpm.lock` schema v1
+- `init`, `lock`, `show`, `check`, `run` · `harness.lock` schema v1
 - Adapters: `reference`, `opencode`, `claude-agent-sdk`
 - Component model with portable kinds `tool`, `mcp` (local), `skill`, `instructions`;
   context isolation; `tree`, `add`, `remove`
@@ -1688,7 +1688,7 @@ Install extras: `agent-lock[vllm]`, `agent-lock[train]`, `agent-lock[docker]`,
 - Docker sandbox default · trace export to OTel and HF
 
 **v0.3: "decision models"**
-- `agent-lock/decider` + `agent-lock/judge` released · decision-model tuning stage
+- `harness-lock/decider` + `harness-lock/judge` released · decision-model tuning stage
 - Layer 2 extension points stable, including the public `ComponentKind` entry point · profiles
 - Portable kinds `memory`, `retrieval`, `guardrail`, `browser`
 - `tasks new --from-traces`
@@ -1696,7 +1696,7 @@ Install extras: `agent-lock[vllm]`, `agent-lock[train]`, `agent-lock[docker]`,
 **v0.4: "scale"**
 - `cluster` backend (self-hosted Flyte and Union) · shared team cache
 - Open-weights candidates served on demand (vLLM/SGLang) · LoRA tuning of executor LLMs
-- `agent-lock/triage` · public `agent-lock/traces` dataset · leaderboard site per pack
+- `harness-lock/triage` · public `harness-lock/traces` dataset · leaderboard site per pack
 - **`upgrade`** (§5.8) with plan/apply/rollback · **`optimize`** (§8.5) with `probe|prompt|hpo|ft`
   depths fuelled by user traces (auto-discovered per harness) or synthetic data → `harness.opt.lock`
 
@@ -1719,15 +1719,15 @@ Install extras: `agent-lock[vllm]`, `agent-lock[train]`, `agent-lock[docker]`,
 **"We tuned an AI data analyst for your company in 20 minutes."**
 
 1. Start from 20–50 domain tasks (an official pack, or `tasks new --from-traces`).
-2. agent-lock tries stacks such as frontier LLM + LangGraph, Claude + OpenCode, Qwen +
+2. harness-lock tries stacks such as frontier LLM + LangGraph, Claude + OpenCode, Qwen +
    custom workflow, small decider + big-model fallback, and local model on a cluster backend.
-3. `al leaderboard` shows the Pareto front.
+3. `hlock leaderboard` shows the Pareto front.
 4. The findings are the story. Illustrative examples of what we expect to show:
    - the frontier-only stack is best but expensive,
    - an open model + decision model gets ~90% of the quality at a fraction of the cost,
    - OpenCode beats generic tool-calling on code-edit tasks,
    - a deterministic workflow beats an agent loop for repeatable data prep.
-5. `al lock` writes `hpm.lock`. `export` ships it. The lock lands in a PR.
+5. `hlock resolve` writes `harness.lock`. `export` ships it. The lock lands in a PR.
 
 The illustrative numbers must be replaced with real, reproducible results before launch.
 
@@ -1738,7 +1738,7 @@ Per-pack leaderboards produce charts and debate:
 - "Claude vs GPT vs Qwen on real agent workflows."
 - "LangGraph vs OpenCode vs Pi on the same tasks."
 - "Which agent stack survives tool failures?"
-- "Your agent isn't production-ready until it has an `hpm.lock`."
+- "Your agent isn't production-ready until it has an `harness.lock`."
 
 ### 15.4 Launch artifacts
 
@@ -1748,10 +1748,10 @@ Flyte/Union cluster backend docs.
 
 ### 15.5 Success metrics
 
-- Time from `pip install` to first `hpm.lock` on the local backend: **< 10 minutes**.
-- `hpm.lock` files in public GitHub repos (search `filename:hpm.lock lock-version`).
+- Time from `pip install` to first `harness.lock` on the local backend: **< 10 minutes**.
+- `harness.lock` files in public GitHub repos (search `filename:harness.lock lock-version`).
 - Community task packs and adapters published.
-- Downloads of `agent-lock/decider` and `agent-lock/judge`.
+- Downloads of `harness-lock/decider` and `harness-lock/judge`.
 - Share of locks produced on devbox/cluster backends (the dial is working).
 - Published case studies where a locked stack matched frontier-only quality at materially
   lower cost.
@@ -1760,13 +1760,13 @@ Flyte/Union cluster backend docs.
 
 ## 16. Open questions
 
-1. **Name collision.** **Resolved:** the manifest is `hpm.toml` and the lockfile is `hpm.lock`
-   (renamed from `agentlock.toml` / `agent.lock`). Still worth checking `hpm.lock` against other
+1. **Name collision.** **Resolved:** the manifest is `harnesslock.toml` and the lockfile is `harness.lock`
+   (renamed from `harnesslock.toml` / `harness.lock`). Still worth checking `harness.lock` against other
 tools' lockfiles before v1.0.
-2. **Lock scope.** One lock per agent, or a multi-agent lock (`[[agent]]` tables) for systems
+2. **Lock scope.** One lock per agent, or a multi-harness lock (`[[agent]]` tables) for systems
    with several cooperating agents?
-3. **Prompt optimization — folded into `al optimize`.** System-prompt / instruction search now
-   lives in the `prompt` and `hpo` depths of `al optimize` (§8.5), where candidate prompts are
+3. **Prompt optimization — folded into `hlock optimize`.** System-prompt / instruction search now
+   lives in the `prompt` and `hpo` depths of `hlock optimize` (§8.5), where candidate prompts are
    tuned and locked as new content digests in `harness.opt.lock` (§5.9) rather than floating
    search axes in the manifest. Open question: how much of this *authorship* (prompt/instruction
    edits) should also surface as first-class manifest search axes in v1, vs. staying an
@@ -1775,7 +1775,7 @@ tools' lockfiles before v1.0.
    Flyte workflows, so steps that don't need to be agentic stop being agentic, and
    generate a workflow from a task plan. That's a strong differentiator (and a natural use
    of the triage model and trace corpus) but a large scope. Treat it as a post-v1
-   `al compile` command, with the compiled workflow becoming a lockable
+   `hlock compile` command, with the compiled workflow becoming a lockable
    `harness = "workflow:…"` candidate?
 5. **Closed-model drift policy.** When a provider retires a pinned model ID, should
    `verify` auto-propose an `update`, or only fail?
@@ -1787,15 +1787,15 @@ tools' lockfiles before v1.0.
    use. We need a per-adapter compliance note before publishing leaderboards.
 9. **Tuning peripheral contents.** Beyond include/exclude, should the tuner *edit* skills and
    instruction files (prompt-optimization style) and lock the improved versions as new
-   digests? That's powerful, but it means agent-lock authors content, not just selects it.
+   digests? That's powerful, but it means harness-lock authors content, not just selects it.
 10. **Skill registries and publisher trust.** Registries (skills.sh and others) are treated
     as discovery only, and pins are always git commits or OCI digests (§7.7). Should
-    agent-lock ship a default `[skills.trust]` allowlist of vendor catalogs? Should it push
+    harness-lock ship a default `[skills.trust]` allowlist of vendor catalogs? Should it push
     for signed skill releases (Sigstore) as an ecosystem norm, and contribute a digest/signature
     field upstream to the Agent Skills spec?
 11. **Isolation default.** `locked-only` isolation is the correct default for reproducibility
     but will surprise people who rely on personal `~/.claude` / `~/.config/opencode` setups.
-    Should `al init` offer to import those into the manifest?
+    Should `hlock init` offer to import those into the manifest?
 12. **Capability drift in fast-moving libraries.** `pydantic-ai-harness` is on 0.x
     versioning with frequent API changes. Should native kinds declare a supported version
     window that the resolver enforces?
@@ -1804,7 +1804,7 @@ tools' lockfiles before v1.0.
 
 ## Appendix A. Concept history and alternatives considered
 
-agent-lock came out of an exploration of which customer problems could be fully or mostly
+harness-lock came out of an exploration of which customer problems could be fully or mostly
 solved by an open artifact (model, dataset, harness, or installable system) that anyone
 could try, not just Union customers.
 
@@ -1820,7 +1820,7 @@ could try, not just Union customers.
    policy against domain task packs and exports the winner. TraceForge became its data
    layer. *Kept as:* the tuner (§8), the manifest search space (§6), decision models (§7.3),
    and `export` (§9.1).
-3. **agent-lock**: adds the missing piece, a sharable, enforceable, version-controlled
+3. **harness-lock**: adds the missing piece, a sharable, enforceable, version-controlled
    result. The lockfile turns a one-time optimization into something you can commit,
    review, verify in CI, and update incrementally. It also adds the local → devbox →
    cluster dial and the layered API, so the tool is useful without any infrastructure.
@@ -1832,7 +1832,7 @@ could try, not just Union customers.
 | Agent benchmark + trace dataset | repo + dataset + benchmark | High reach; folded in as §7.1, §10, §15.3 |
 | Private model-factory template | repo + workflows | Strong Union fit, but a template rather than a product; candidate future example |
 | Local LLM gateway proxy | installable system | Crowded market; folded in as an internal component (§7.4 proxy) |
-| Fine-tuned workflow-repair model | model + dataset | Best as a companion artifact; became `agent-lock/triage` (§11) |
+| Fine-tuned workflow-repair model | model + dataset | Best as a companion artifact; became `harness-lock/triage` (§11) |
 | Standalone research-agent app | app/harness | Good demo but less differentiated; became an example agent + the first task pack |
 
 ## Appendix B. References for the peripheral and skills survey (§5.4, §7.6, §7.7)

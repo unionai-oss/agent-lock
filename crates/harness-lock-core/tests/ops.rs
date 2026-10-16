@@ -1,4 +1,4 @@
-//! End-to-end tests for `al upgrade` (§5.8) and `al optimize` (§5.9).
+//! End-to-end tests for `hlock upgrade` (§5.8) and `hlock optimize` (§5.9).
 //!
 //! These chdir, so they are consolidated into a single test that runs
 //! sequentially within the process (integration-test threads share the cwd).
@@ -6,8 +6,8 @@
 use std::fs;
 use std::path::Path;
 
-use agent_lock_core::ops::{optimize, plan_upgrade, upgrade, OptimizeSpec, UpgradeSpec};
-use agent_lock_core::{Lockfile, Manifest, Tuner, LOCKFILE_PATH};
+use harness_lock_core::ops::{optimize, plan_upgrade, upgrade, OptimizeSpec, UpgradeSpec};
+use harness_lock_core::{Lockfile, Manifest, Tuner, LOCKFILE_PATH};
 
 fn make_pack(root: &Path) {
     let taskdir = root.join("t1");
@@ -59,7 +59,7 @@ target = "local"
 
 #[test]
 fn ops_end_to_end_upgrade_and_optimize() {
-    let dir = std::env::temp_dir().join(format!("al-ops-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("hlock-ops-{}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     let cwd = std::env::current_dir().unwrap();
@@ -67,7 +67,7 @@ fn ops_end_to_end_upgrade_and_optimize() {
 
     make_pack(&dir);
     let manifest = make_manifest(&dir);
-    let _ = Tuner::new(manifest.clone(), dir.join(".agentlock")).tune().unwrap();
+    let _ = Tuner::new(manifest.clone(), dir.join(".harnesslock")).tune().unwrap();
     let base = Lockfile::load(Path::new(LOCKFILE_PATH)).unwrap();
     let base_model = base.llm[0].model.clone();
 
@@ -75,13 +75,13 @@ fn ops_end_to_end_upgrade_and_optimize() {
     let plan = plan_upgrade(Some(&base), &manifest, &UpgradeSpec::default());
     assert!(!plan["upgradeable"].as_array().unwrap().is_empty());
 
-    let apply_spec = UpgradeSpec { all: true, apply: true, workdir: dir.join(".agentlock"), ..Default::default() };
+    let apply_spec = UpgradeSpec { all: true, apply: true, workdir: dir.join(".harnesslock"), ..Default::default() };
     let applied = upgrade(manifest.clone(), &apply_spec).unwrap();
     assert!(applied.applied);
     assert!(dir.join(format!("{LOCKFILE_PATH}.prev")).exists());
     assert_eq!(Lockfile::load(Path::new(LOCKFILE_PATH)).unwrap().llm[0].model, "qwen-32b");
 
-    let rb = UpgradeSpec { rollback: true, apply: false, workdir: dir.join(".agentlock"), ..Default::default() };
+    let rb = UpgradeSpec { rollback: true, apply: false, workdir: dir.join(".harnesslock"), ..Default::default() };
     assert!(upgrade(manifest.clone(), &rb).unwrap().rolled_back);
     assert_eq!(Lockfile::load(Path::new(LOCKFILE_PATH)).unwrap().llm[0].model, base_model);
 
@@ -90,7 +90,7 @@ fn ops_end_to_end_upgrade_and_optimize() {
         depth: "hpo".into(),
         data: "user".into(),
         out: dir.join("harness.opt.lock"),
-        workdir: dir.join(".agentlock"),
+        workdir: dir.join(".harnesslock"),
         ..Default::default()
     };
     let outcome = optimize(manifest.clone(), &opt_spec).unwrap();

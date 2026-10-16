@@ -1,4 +1,4 @@
-"""Layer 0 — the ``al`` command line interface."""
+"""Layer 0 — the ``hlock`` command line interface."""
 
 from __future__ import annotations
 
@@ -7,28 +7,28 @@ import sys
 
 import click
 
-from agent_lock import __version__
+from harness_lock import __version__
 
 
 @click.group()
-@click.version_option(__version__, prog_name="al")
+@click.version_option(__version__, prog_name="hlock")
 def main() -> None:
-    """al — lock your agent into place."""
+    """hlock — lock your agent into place."""
 
 
 @main.command()
 @click.option("--name", default="agent", show_default=True, help="Project/agent name")
 @click.option("--pack", default="./tasks", show_default=True, help="Path to a task pack directory")
-@click.option("--force", is_flag=True, help="Overwrite an existing hpm.toml")
+@click.option("--force", is_flag=True, help="Overwrite an existing harnesslock.toml")
 def init(name: str, pack: str, force: bool) -> None:
-    """Write a starter hpm.toml manifest."""
+    """Write a starter harnesslock.toml manifest."""
     from pathlib import Path
 
-    p = Path("hpm.toml")
+    p = Path("harnesslock.toml")
     if p.exists() and not force:
-        click.echo("hpm.toml already exists (use --force to overwrite)")
+        click.echo("harnesslock.toml already exists (use --force to overwrite)")
         sys.exit(1)
-    from al.scaffold import render_default_manifest
+    from hlock.scaffold import render_default_manifest
 
     p.write_text(render_default_manifest(name=name, pack=pack))
     click.echo(f"wrote {p}")
@@ -38,41 +38,41 @@ def init(name: str, pack: str, force: bool) -> None:
 @click.option("--backend", default=None, help="local | devbox | cluster (override manifest)")
 @click.option("--config", default=None, help="Flyte config path for devbox/cluster backends")
 @click.option("--max-trials", default=None, type=int, help="Cap the number of trials")
-def lock(backend: str | None, config: str | None, max_trials: int | None) -> None:
-    """Tune the search space and write hpm.lock."""
-    from agent_lock import backends
-    from al.api import lock as _lock
-    from al.manifest import Manifest
+def resolve(backend: str | None, config: str | None, max_trials: int | None) -> None:
+    """Tune the search space and write harness.lock."""
+    from harness_lock import backends
+    from hlock.api import resolve as _resolve
+    from hlock.manifest import Manifest
 
-    m = Manifest.load("hpm.toml")
+    m = Manifest.load("harnesslock.toml")
     if backend:
         m.backend.target = backend  # type: ignore[assignment]
     if max_trials is not None:
         m.budget.max_trials = max_trials
     tuner = backends.make_backend(m.backend.target, config=config)
-    lf = _lock(m, backend=tuner)
-    click.echo("wrote hpm.lock")
+    lf = _resolve(m, backend=tuner)
+    click.echo("wrote harness.lock")
     click.echo(lf.summary())
 
 
 @main.command()
 def show() -> None:
     """Pretty-print the locked stack and evidence."""
-    from hpm.lockfile import Lockfile
+    from harness.lockfile import Lockfile
 
-    lf = Lockfile.load("hpm.lock")
-    click.echo(_render_lock(lf))
+    lf = Lockfile.load("harness.lock")
+    click.echo(_render_resolve(lf))
 
 
 @main.command()
 def check() -> None:
     """Static verification (CI-friendly exit code)."""
 
-    from hpm.lockfile import Lockfile
-    from al.manifest import Manifest
+    from harness.lockfile import Lockfile
+    from hlock.manifest import Manifest
 
-    m = Manifest.load("hpm.toml")
-    lf = Lockfile.load("hpm.lock")
+    m = Manifest.load("harnesslock.toml")
+    lf = Lockfile.load("harness.lock")
     problems = lf.check_manifest(m.manifest_hash())
     if problems:
         for p in problems:
@@ -85,9 +85,9 @@ def check() -> None:
 @main.command()
 def tree() -> None:
     """Print the locked component dependency graph."""
-    from hpm.lockfile import Lockfile
+    from harness.lockfile import Lockfile
 
-    lf = Lockfile.load("hpm.lock")
+    lf = Lockfile.load("harness.lock")
     click.echo(f"[stack] {lf.stack.get('name', 'agent')}")
     for llm in lf.llms:
         click.echo(f"  ├─ [llm:{llm.role}] {llm.provider}:{llm.model}")
@@ -105,9 +105,9 @@ def tree() -> None:
 @click.argument("prompt")
 def run(prompt: str) -> None:
     """Run the locked agent on a prompt (with runtime guard)."""
-    from al.api import load
+    from hlock.api import load
 
-    agent = load("hpm.lock", mode="strict")
+    agent = load("harness.lock", mode="strict")
     outcome = asyncio.run(agent.run(prompt))
     click.echo(f"success={outcome.success} steps={outcome.metrics.get('steps')} "
                f"cost=${outcome.metrics.get('cost_usd', 0):.4f}")
@@ -117,8 +117,8 @@ def run(prompt: str) -> None:
 @main.command()
 @click.option("--format", "fmt", default="text", type=click.Choice(["text", "md"]))
 def diff(fmt: str) -> None:
-    """Structural + evidence diff vs. the committed hpm.lock."""
-    from al.diffing import Diff
+    """Structural + evidence diff vs. the committed harness.lock."""
+    from hlock.diffing import Diff
 
     click.echo(Diff().run(fmt=fmt))
 
@@ -132,11 +132,11 @@ def backend() -> None:
 @click.option("--config", default=None, help="Flyte config path (default ~/.flyte/config.yaml)")
 def backend_status(config: str | None) -> None:
     """Report the active backend and Flyte config connectivity."""
-    from agent_lock import backends
-    from al.manifest import Manifest
+    from harness_lock import backends
+    from hlock.manifest import Manifest
 
     try:
-        m = Manifest.load("hpm.toml")
+        m = Manifest.load("harnesslock.toml")
     except Exception:
         m = None
     target = m.backend.target if m else "local"
@@ -149,11 +149,11 @@ def backend_status(config: str | None) -> None:
             # verify connectivity without launching work
             click.echo("flyte SDK present; connection verified at lock/run time")
         else:
-            click.echo("flyte SDK not importable — install `pip install agent-lock[flyte]`")
+            click.echo("flyte SDK not importable — install `pip install harness-lock[flyte]`")
 
 
-def _render_lock(lf) -> str:
-    lines = [f"hpm.lock  (lock-version {lf.lock_version}, generated by {lf.generated_by})", ""]
+def _render_resolve(lf) -> str:
+    lines = [f"harness.lock  (lock-version {lf.lock_version}, generated by {lf.generated_by})", ""]
     lines.append(f"stack       {lf.stack.get('name', 'agent')}  selection={lf.stack.get('selection')}")
     for llm in lf.llms:
         lines.append(f"llm:{llm.role:<8} {llm.provider}:{llm.model}")

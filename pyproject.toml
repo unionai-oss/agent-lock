@@ -3,7 +3,7 @@ requires = ["maturin>=1.5,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "agent-lock"
+name = "harness-lock"
 version = "0.1.0"
 description = "Lock your agent into place — tune your agent stack and pin it (Rust core + Python bindings)."
 readme = "README.md"
@@ -31,12 +31,12 @@ flyte = [
 ]
 
 [project.scripts]
-al = "agent_lock.cli:main"
-agent-lock = "agent_lock.cli:main"
+hlock = "harness_lock.cli:main"
+harness-lock = "harness_lock.cli:main"
 
 [tool.maturin]
-manifest-path = "crates/agent-lock/Cargo.toml"
-module-name = "agent_lock._agent_lock"
+manifest-path = "crates/harness-lock/Cargo.toml"
+module-name = "harness_lock._harness_lock"
 python-source = "."
 
 [tool.pytest.ini_options]

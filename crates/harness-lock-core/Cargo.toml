@@ -1,16 +1,16 @@
 [package]
-name = "agent-lock-core"
+name = "harness-lock-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Core library for agent-lock: manifest, lockfile, store, tuning."
+description = "Core library for harness-lock: manifest, lockfile, store, tuning."
 
-# Code-facing crate name stays `agent_lock_core` while the published (crates.io)
-# name is `agent-lock-core`.
+# Code-facing crate name stays `harness_lock_core` while the published (crates.io)
+# name is `harness-lock-core`.
 [lib]
-name = "agent_lock_core"
+name = "harness_lock_core"
 
 [dependencies]
 serde = { workspace = true }

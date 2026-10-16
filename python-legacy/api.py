@@ -1,7 +1,7 @@
 """Layer 1 — the Python API (scriptable, embeddable).
 
 Everything here is pure Python with no Flyte imports. ``flyte`` appears only in
-``al.flyte`` (Layer 3) and is imported lazily by the cluster/devbox backend.
+``hlock.flyte`` (Layer 3) and is imported lazily by the cluster/devbox backend.
 """
 
 from __future__ import annotations
@@ -10,12 +10,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from agent_lock import backends
-from hpm.lockfile import Lockfile
-from al.manifest import Backend, Budget, Manifest, Objective
-from al.runtime import LockedAgent
-from al.tasks import TaskPack
-from al.tuner import Tuner
+from harness_lock import backends
+from harness.lockfile import Lockfile
+from hlock.manifest import Backend, Budget, Manifest, Objective
+from hlock.runtime import LockedAgent
+from hlock.tasks import TaskPack
+from hlock.tuner import Tuner
 
 
 # --------------------------------------------------------------------------- #
@@ -29,7 +29,7 @@ class LLMSpace:
 
 @dataclass
 class SearchSpace:
-    """Programmatic stand-in for an ``hpm.toml`` manifest."""
+    """Programmatic stand-in for an ``harnesslock.toml`` manifest."""
 
     llm: dict[str, list[str]] = field(default_factory=dict)
     decision: list[str] = field(default_factory=list)
@@ -59,7 +59,7 @@ class SearchSpace:
 # --------------------------------------------------------------------------- #
 # Public functions
 # --------------------------------------------------------------------------- #
-def lock(
+def resolve(
     manifest: Manifest | str | Path | SearchSpace | None = None,
     tasks: TaskPack | list | None = None,
     objective: Objective | None = None,
@@ -69,8 +69,8 @@ def lock(
 ) -> Lockfile:
     """Tune and return (and write) the locked agent stack.
 
-    Accepts a Manifest, a path to an ``hpm.toml``, a programmatic
-    ``SearchSpace``, or ``None`` (loads ``./hpm.toml``).
+    Accepts a Manifest, a path to an ``harnesslock.toml``, a programmatic
+    ``SearchSpace``, or ``None`` (loads ``./harnesslock.toml``).
     """
     if isinstance(manifest, SearchSpace):
         m = manifest.to_manifest()
@@ -79,7 +79,7 @@ def lock(
     elif isinstance(manifest, Manifest):
         m = manifest
     else:
-        m = Manifest.load("hpm.toml")
+        m = Manifest.load("harnesslock.toml")
 
     if objective:
         m.objective = objective
@@ -94,7 +94,7 @@ def lock(
     return tuner.tune(backend=bk)
 
 
-def load(path: str | Path = "hpm.lock", mode: str = "strict") -> LockedAgent:
+def load(path: str | Path = "harness.lock", mode: str = "strict") -> LockedAgent:
     """Load a lockfile into a runnable, guarded agent."""
     return LockedAgent.load(path, mode=mode)
 

@@ -1,8 +1,8 @@
 name: publish-python
 
-# Publishes the `agent-lock` Python bindings to PyPI.
+# Publishes the `harness-lock` Python bindings to PyPI.
 #
-# Pip / uv / uvx install from PyPI: `pip install agent-lock`.
+# Pip / uv / uvx install from PyPI: `pip install harness-lock`.
 #
 # Setup (once, in the repo Settings > Secrets and variables > Actions):
 #   - Trusted publishing (recommended): create a PyPI "publisher" mapping to this
@@ -46,13 +46,13 @@ jobs:
       - name: Build wheels (abi3, CPython ≥ 3.9)
         uses: PyO3/maturin-action@v1
         with:
-          manifest-path: crates/agent-lock/Cargo.toml
+          manifest-path: crates/harness-lock/Cargo.toml
           args: --release --out dist
-          # agent-lock-core is a workspace member; build only the bindings crate.
+          # harness-lock-core is a workspace member; build only the bindings crate.
           manylinux: auto
       - name: Build source dist (Linux only)
         if: runner.os == 'Linux'
-        run: maturin sdist --manifest-path crates/agent-lock/Cargo.toml -o dist
+        run: maturin sdist --manifest-path crates/harness-lock/Cargo.toml -o dist
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:

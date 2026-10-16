@@ -14,7 +14,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Build & test core
-        run: cargo test -p agent-lock-core
+        run: cargo test -p harness-lock-core
 
   python-bindings:
     name: Python bindings (pytest + ruff)
@@ -30,8 +30,8 @@ jobs:
       - name: Install build deps
         run: pip install maturin click pytest ruff
       - name: Build & install the extension
-        run: maturin develop -m crates/agent-lock/Cargo.toml
+        run: maturin develop -m crates/harness-lock/Cargo.toml
       - name: Unit tests
         run: python -m pytest tests -q
       - name: Lint
-        run: ruff check agent-lock tests
+        run: ruff check harness-lock tests

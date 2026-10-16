@@ -1,7 +1,7 @@
-//! PyO3 Python bindings for **agent-lock**.
+//! PyO3 Python bindings for **harness-lock**.
 //!
-//! Exposes the same user-facing API as the (reference) pure-Python `agent_lock`
-//! package, backed by the Rust core (`agent-lock-core`): `Manifest`,
+//! Exposes the same user-facing API as the (reference) pure-Python `harness_lock`
+//! package, backed by the Rust core (`harness-lock-core`): `Manifest`,
 //! `SearchSpace`, `Objective`, `Budget`, `lock()`, `load()`, and the `Lockfile`
 //! model.
 //!
@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
-use agent_lock_core as core;
+use harness_lock_core as core;
 
 fn py_err(e: core::Error) -> PyErr {
     PyValueError::new_err(e.to_string())
@@ -22,8 +22,8 @@ fn py_err(e: core::Error) -> PyErr {
 // --------------------------------------------------------------------------- //
 // Manifest
 // --------------------------------------------------------------------------- //
-/// A parsed `hpm.toml`.
-#[pyclass(module = "agent_lock", name = "Manifest")]
+/// A parsed `harnesslock.toml`.
+#[pyclass(module = "harness_lock", name = "Manifest")]
 #[derive(Clone)]
 pub struct PyManifest {
     inner: core::Manifest,
@@ -67,7 +67,7 @@ impl PyManifest {
 // --------------------------------------------------------------------------- //
 // Objective / Budget
 // --------------------------------------------------------------------------- //
-#[pyclass(module = "agent_lock", name = "Objective")]
+#[pyclass(module = "harness_lock", name = "Objective")]
 #[derive(Clone)]
 pub struct PyObjective {
     primary: String,
@@ -105,7 +105,7 @@ impl PyObjective {
     }
 }
 
-#[pyclass(module = "agent_lock", name = "Budget")]
+#[pyclass(module = "harness_lock", name = "Budget")]
 #[derive(Clone)]
 pub struct PyBudget {
     max_spend_usd: Option<f64>,
@@ -142,7 +142,7 @@ impl PyBudget {
 // --------------------------------------------------------------------------- //
 // SearchSpace
 // --------------------------------------------------------------------------- //
-#[pyclass(module = "agent_lock", name = "SearchSpace")]
+#[pyclass(module = "harness_lock", name = "SearchSpace")]
 #[derive(Clone)]
 pub struct PySearchSpace {
     llm: std::collections::BTreeMap<String, Vec<String>>,
@@ -272,7 +272,7 @@ fn object_of(v: &serde_json::Value) -> std::collections::BTreeMap<String, serde_
 // --------------------------------------------------------------------------- //
 // Lockfile
 // --------------------------------------------------------------------------- //
-#[pyclass(module = "agent_lock", name = "Lockfile")]
+#[pyclass(module = "harness_lock", name = "Lockfile")]
 pub struct PyLockfile {
     inner: core::Lockfile,
 }
@@ -346,7 +346,7 @@ impl PyLockfile {
 // --------------------------------------------------------------------------- //
 // LockedAgent
 // --------------------------------------------------------------------------- //
-#[pyclass(module = "agent_lock", name = "LockedAgent")]
+#[pyclass(module = "harness_lock", name = "LockedAgent")]
 pub struct PyLockedAgent {
     lock: core::Lockfile,
 }
@@ -382,9 +382,9 @@ impl PyLockedAgent {
 // --------------------------------------------------------------------------- //
 #[pyfunction]
 #[pyo3(signature = (manifest=None, backend=None, workdir=None))]
-fn lock(py: Python<'_>, manifest: Option<PyObject>, backend: Option<String>, workdir: Option<String>) -> PyResult<PyLockfile> {
+fn resolve(py: Python<'_>, manifest: Option<PyObject>, backend: Option<String>, workdir: Option<String>) -> PyResult<PyLockfile> {
     let core_manifest = resolve_manifest(py, manifest, backend.as_deref())?;
-    let wd = workdir.unwrap_or_else(|| ".agentlock".to_string());
+    let wd = workdir.unwrap_or_else(|| ".harnesslock".to_string());
     let backend = core::Backend::parse(core_manifest.backend_target().as_str());
     let mut tuner = core::Tuner::with_backend(core_manifest, &wd, backend);
     let lf = tuner.tune().map_err(py_err)?;
@@ -415,11 +415,11 @@ fn resolve_manifest(py: Python<'_>, manifest: Option<PyObject>, backend: Option<
                 }
             } else {
                 return Err(PyValueError::new_err(
-                    "manifest must be a al.Manifest, al.SearchSpace, a path, or TOML text",
+                    "manifest must be a hlock.Manifest, hlock.SearchSpace, a path, or TOML text",
                 ));
             }
         }
-        None => core::Manifest::load(Path::new("hpm.toml")).map_err(py_err)?,
+        None => core::Manifest::load(Path::new("harnesslock.toml")).map_err(py_err)?,
     };
     if let Some(b) = backend {
         m.backend.insert("target".to_string(), serde_json::json!(b));
@@ -446,7 +446,7 @@ fn upgrade(
         apply,
         rollback,
         force,
-        workdir: PathBuf::from(workdir.unwrap_or_else(|| ".agentlock".to_string())),
+        workdir: PathBuf::from(workdir.unwrap_or_else(|| ".harnesslock".to_string())),
     };
     let o = core::ops::upgrade(m, &spec).map_err(py_err)?;
     Ok(serde_json::json!({
@@ -486,7 +486,7 @@ fn optimize(
         apply,
         max_trials,
         backend,
-        workdir: PathBuf::from(workdir.unwrap_or_else(|| ".agentlock".to_string())),
+        workdir: PathBuf::from(workdir.unwrap_or_else(|| ".harnesslock".to_string())),
     };
     let o = core::ops::optimize(m, &spec).map_err(py_err)?;
     Ok(serde_json::json!({
@@ -498,14 +498,14 @@ fn optimize(
 }
 
 #[pymodule]
-fn _agent_lock(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn _harness_lock(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyManifest>()?;
     m.add_class::<PyObjective>()?;
     m.add_class::<PyBudget>()?;
     m.add_class::<PySearchSpace>()?;
     m.add_class::<PyLockfile>()?;
     m.add_class::<PyLockedAgent>()?;
-    m.add_function(wrap_pyfunction!(lock, m)?)?;
+    m.add_function(wrap_pyfunction!(resolve, m)?)?;
     m.add_function(wrap_pyfunction!(load, m)?)?;
     m.add_function(wrap_pyfunction!(upgrade, m)?)?;
     m.add_function(wrap_pyfunction!(optimize, m)?)?;

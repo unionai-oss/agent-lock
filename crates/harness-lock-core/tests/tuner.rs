@@ -1,10 +1,10 @@
 //! End-to-end tuner test: build a temp task pack, run `Tuner::tune`, and check
-//! the produced `hpm.lock`.
+//! the produced `harness.lock`.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use agent_lock_core::{Manifest, Tuner};
+use harness_lock_core::{Manifest, Tuner};
 
 fn make_pack(root: &Path) -> PathBuf {
     let taskdir = root.join("t1");
@@ -78,8 +78,8 @@ target = "local"
 }
 
 #[test]
-fn tune_writes_a_lock() {
-    let base = std::env::temp_dir().join(format!("al-tuner-{}", std::process::id()));
+fn tune_writes_a_resolve() {
+    let base = std::env::temp_dir().join(format!("hlock-tuner-{}", std::process::id()));
     let _ = fs::remove_dir_all(&base);
     fs::create_dir_all(&base).unwrap();
     let cwd = std::env::current_dir().unwrap();
@@ -88,17 +88,17 @@ fn tune_writes_a_lock() {
     let pack = make_pack(&base);
     let manifest = make_manifest(&pack);
     let mh = manifest.manifest_hash();
-    let mut tuner = Tuner::new(manifest, base.join(".agentlock"));
+    let mut tuner = Tuner::new(manifest, base.join(".harnesslock"));
     let lock = tuner.tune().unwrap();
 
     // lock is written at cwd
-    let lock_path = base.join("hpm.lock");
-    assert!(lock_path.exists(), "hpm.lock should be written at cwd");
+    let lock_path = base.join("harness.lock");
+    assert!(lock_path.exists(), "harness.lock should be written at cwd");
     assert_eq!(lock.harness.name, "reference");
     assert!(lock.evidence.trials >= 2);
 
     // reload and confirm it round-trips
-    let reloaded = agent_lock_core::Lockfile::load(&lock_path).unwrap();
+    let reloaded = harness_lock_core::Lockfile::load(&lock_path).unwrap();
     assert_eq!(reloaded.summary(), lock.summary());
     assert!(reloaded.check_manifest(&mh).is_empty());
 

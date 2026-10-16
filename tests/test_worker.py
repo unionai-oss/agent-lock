@@ -1,6 +1,6 @@
-"""Tests for the Rust <-> Python worker bridge (agent_lock.tasks.worker).
+"""Tests for the Rust <-> Python worker bridge (harness_lock.tasks.worker).
 
-These prove the seam ``al optimize --backend devbox|cluster`` uses: the Rust core
+These prove the seam ``hlock optimize --backend devbox|cluster`` uses: the Rust core
 shells a trial out to the Python worker over a versioned JSON contract and
 consumes the response. They run entirely offline — the worker's LLM call falls
 back to the deterministic reference RNG when no ``AL_LLM_BASE_URL`` is set, and
@@ -29,7 +29,7 @@ def run_worker(req: dict) -> dict:
         rs_path = td / "_al_response.json"
         rq_path.write_text(json.dumps(req))
         proc = subprocess.run(
-            [sys.executable, "-m", "agent_lock.tasks.worker", str(rq_path), str(rs_path)],
+            [sys.executable, "-m", "harness_lock.tasks.worker", str(rq_path), str(rs_path)],
             capture_output=True,
             text=True,
             check=False,
@@ -128,15 +128,15 @@ select = "min-cost"
 strategy = "grid"
 max_trials = 1
 """
-    (tmp_path / "hpm.toml").write_text(manifest)
+    (tmp_path / "harnesslock.toml").write_text(manifest)
 
-    import agent_lock as al
+    import harness_lock as hlock
 
-    out = json.loads(al.optimize(backend="devbox", depth="probe", data="synthetic:1", max_trials=1))
+    out = json.loads(hlock.optimize(backend="devbox", depth="probe", data="synthetic:1", max_trials=1))
     report = out["report"]
     assert report["backend"] == "devbox"
     assert (tmp_path / "harness.opt.lock").exists()
     assert report["best"]["trials"] == 1  # evidence.trials follows the winner's real trial count
 
-    lf = al.Lockfile.load(str(tmp_path / "harness.opt.lock"))
+    lf = hlock.Lockfile.load(str(tmp_path / "harness.opt.lock"))
     assert json.loads(lf.to_json())["kind"] == "optimized"

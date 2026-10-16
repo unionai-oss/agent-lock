@@ -1,24 +1,24 @@
 [package]
-name = "agent-lock"
+name = "harness-lock"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Python bindings for agent-lock."
+description = "Python bindings for harness-lock."
 
 [lib]
-name = "agent_lock"
+name = "harness_lock"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-agent-lock-core = { path = "../agent-lock-core", version = "0.1.0" }
+harness-lock-core = { path = "../harness-lock-core", version = "0.1.0" }
 pyo3 = { workspace = true }
 serde_json = { workspace = true }
 
 [features]
 default = []
 
-# Build the release extension module as the importable `agent_lock` package.
+# Build the release extension module as the importable `harness_lock` package.
 [package.metadata.maturin]
 python-source = "."

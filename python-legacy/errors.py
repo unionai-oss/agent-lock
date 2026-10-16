@@ -1,4 +1,4 @@
-"""Shared exceptions and small helpers for agent-lock."""
+"""Shared exceptions and small helpers for harness-lock."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from typing import Any
 
 
 class AgentLockError(Exception):
-    """Base class for all agent-lock errors."""
+    """Base class for all harness-lock errors."""
 
 
 class ManifestError(AgentLockError):
@@ -18,15 +18,15 @@ class ManifestError(AgentLockError):
 
 
 class LockfileError(AgentLockError):
-    """An hpm.lock is malformed, stale, or out of schema."""
+    """An harness.lock is malformed, stale, or out of schema."""
 
 
 class CheckFailed(AgentLockError):
-    """Static verification (``al check``) found violations."""
+    """Static verification (``hlock check``) found violations."""
 
 
 class VerifyFailed(AgentLockError):
-    """Dynamic verification (``al verify``) found drift."""
+    """Dynamic verification (``hlock verify``) found drift."""
 
 
 class UnsupportedComponent(AgentLockError):

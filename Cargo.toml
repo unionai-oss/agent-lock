@@ -1,17 +1,17 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/agent-lock-core",
-    "crates/agent-lock",
+    "crates/harness-lock-core",
+    "crates/harness-lock",
 ]
-default-members = ["crates/agent-lock-core", "crates/agent-lock"]
+default-members = ["crates/harness-lock-core", "crates/harness-lock"]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
 authors = ["Niels Bantilan <niels.bantilan@gmail.com>"]
-repository = "https://github.com/unionai-oss/agent-lock"
+repository = "https://github.com/unionai-oss/harness-lock"
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }

@@ -1,8 +1,8 @@
-//! Bridge from the Rust core to the Python worker (`agent_lock.tasks.worker`).
+//! Bridge from the Rust core to the Python worker (`harness_lock.tasks.worker`).
 //!
 //! The Rust core stays the orchestrator and aggregator — manifests, search
 //! planning, trial bookkeeping, evidence, and lock construction. The
-//! ecosystem- and compute-heavy *work items* of `al optimize` that must run
+//! ecosystem- and compute-heavy *work items* of `hlock optimize` that must run
 //! where the Python toolchain and GPUs live (real LLM invocation, user-trace
 //! loading with pandas/polars, synthetic-data generation, model grading, prompt
 //! search, LoRA fine-tuning) are handled by a small Python worker that the core
@@ -10,7 +10,7 @@
 //!
 //! On `local` the tuner uses the deterministic in-process reference harness (no
 //! Python). On `devbox`/`cluster` the [`PythonAdapter`] takes over and calls
-//! `python -m agent_lock.tasks.worker <request.json> <response.json>`; that
+//! `python -m harness_lock.tasks.worker <request.json> <response.json>`; that
 //! worker may in turn lift each body to a real Flyte task via the Python `flyte`
 //! / `flyteplugins-rs` packages, but returns the identical response shape either
 //! way — so the Rust core never changes based on where the work actually ran.
@@ -111,7 +111,7 @@ pub struct TaskResponse {
 /// A `HarnessAdapter` that delegates each trial to the Python worker.
 ///
 /// The interpreter is taken from `AL_PYTHON` (falling back to `python3`) so it
-/// can be pinned to the interpreter that actually has `agent_lock` installed
+/// can be pinned to the interpreter that actually has `harness_lock` installed
 /// (e.g. a project venv), independent of the interpreter the Rust wheel itself
 /// runs inside.
 pub struct PythonAdapter {
@@ -124,7 +124,7 @@ impl PythonAdapter {
         let interp = std::env::var("AL_PYTHON").unwrap_or_else(|_| "python3".to_string());
         PythonAdapter {
             interp,
-            module: "agent_lock.tasks.worker".to_string(),
+            module: "harness_lock.tasks.worker".to_string(),
         }
     }
 }
@@ -172,7 +172,7 @@ impl HarnessAdapter for PythonAdapter {
             .output()
             .map_err(|e| {
                 Error::Worker(format!(
-                    "could not start Python worker ({}) — is agent-lock installed for `{}`? ({e})",
+                    "could not start Python worker ({}) — is harness-lock installed for `{}`? ({e})",
                     self.module, self.interp
                 ))
             })?;

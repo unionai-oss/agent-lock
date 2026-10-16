@@ -1,6 +1,6 @@
 """Structural + evidence diff between the working lock and the committed one.
 
-``al diff`` compares the current ``hpm.lock`` (the result of the last ``al lock``)
+``hlock diff`` compares the current ``harness.lock`` (the result of the last ``hlock resolve``)
 against the git-committed version, and renders an evidence diff suitable for a PR
 description.
 """
@@ -9,11 +9,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from hpm.lockfile import Lockfile
+from harness.lockfile import Lockfile
 
 
 class Diff:
-    def __init__(self, path: str | Path = "hpm.lock") -> None:
+    def __init__(self, path: str | Path = "harness.lock") -> None:
         self.path = Path(path)
         self.committed = self._read_committed()
 
@@ -24,7 +24,7 @@ class Diff:
             raw = subprocess.run(
                 ["git", "show", f"HEAD:{self.path}"], capture_output=True, text=True, check=True
             ).stdout
-            from hpm.lockfile import Lockfile as L
+            from harness.lockfile import Lockfile as L
 
             obj = L.model_validate(
                 __import__("tomllib").loads("\n".join(l for l in raw.splitlines() if not l.startswith("#")))
@@ -36,7 +36,7 @@ class Diff:
     def run(self, fmt: str = "text") -> str:
         cur = Lockfile.load(self.path)
         if self.committed is None:
-            return f"[diff] no committed hpm.lock to diff against (HEAD:{self.path})"
+            return f"[diff] no committed harness.lock to diff against (HEAD:{self.path})"
 
         lines = []
         if self.committed.stack.get("name") != cur.stack.get("name"):

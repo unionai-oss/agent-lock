@@ -1,9 +1,9 @@
-"""agent-lock — lock your agent into place.
+"""harness-lock — lock your agent into place.
 
-User-facing Python API, backed by the Rust core (compiled into ``agent_lock._agent_lock``).
+User-facing Python API, backed by the Rust core (compiled into ``harness_lock._harness_lock``).
 """
 
-from ._agent_lock import (
+from ._harness_lock import (
     LOCK_VERSION,
     Budget,
     LockedAgent,
@@ -13,8 +13,8 @@ from ._agent_lock import (
     SearchSpace,
     __version__,
     load,
-    lock,
     optimize,
+    resolve,
     upgrade,
 )
 
@@ -28,7 +28,7 @@ __all__ = [
     "SearchSpace",
     "__version__",
     "load",
-    "lock",
     "optimize",
+    "resolve",
     "upgrade",
 ]

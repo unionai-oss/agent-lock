@@ -1,4 +1,4 @@
-//! The tuner: turns a manifest into an `hpm.lock`.
+//! The tuner: turns a manifest into an `harness.lock`.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -153,7 +153,7 @@ impl Tuner {
         }
     }
 
-    /// Tune: enumerate, run, aggregate, select, and write `hpm.lock`.
+    /// Tune: enumerate, run, aggregate, select, and write `harness.lock`.
     pub fn tune(&mut self) -> Result<Lockfile> {
         let search_tasks = self.load_packs();
         let stacks = self.enumerate_stacks();
@@ -203,13 +203,13 @@ impl Tuner {
         )
         .ok_or_else(|| Error::Tuning("no viable stack found".into()))?;
 
-        let lock = self.build_lock(&winner, &scores);
+        let lock = self.build_resolve(&winner, &scores);
         lock.save(std::path::Path::new(crate::LOCKFILE_PATH))?;
         let _ = self.write_report(&lock, &scores);
         Ok(lock)
     }
 
-    fn build_lock(&self, winner: &StackScore, _scores: &[StackScore]) -> Lockfile {
+    fn build_resolve(&self, winner: &StackScore, _scores: &[StackScore]) -> Lockfile {
         let s = &winner.stack;
         let llms = s
             .llm
@@ -290,7 +290,7 @@ impl Tuner {
 
     fn write_report(&self, lock: &Lockfile, _scores: &[StackScore]) -> Result<()> {
         let report = self.workdir.join("report.md");
-        std::fs::write(&report, format!("# agent-lock report\n\n{}\n", lock.summary()))?;
+        std::fs::write(&report, format!("# harness-lock report\n\n{}\n", lock.summary()))?;
         Ok(())
     }
 }

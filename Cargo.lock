@@ -3,28 +3,6 @@
 version = 4
 
 [[package]]
-name = "agent-lock"
-version = "0.1.0"
-dependencies = [
- "agent-lock-core",
- "pyo3",
- "serde_json",
-]
-
-[[package]]
-name = "agent-lock-core"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "flyte",
- "serde",
- "serde_json",
- "sha2",
- "thiserror 2.0.21",
- "toml",
-]
-
-[[package]]
 name = "aho-corasick"
 version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -600,6 +578,28 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+]
+
+[[package]]
+name = "harness-lock"
+version = "0.1.0"
+dependencies = [
+ "harness-lock-core",
+ "pyo3",
+ "serde_json",
+]
+
+[[package]]
+name = "harness-lock-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "flyte",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.21",
+ "toml",
 ]
 
 [[package]]
