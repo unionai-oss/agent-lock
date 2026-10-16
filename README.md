@@ -124,12 +124,12 @@ print(agent.run("clean ./data/orders.csv"))
 
 Select the backend with `--backend local|devbox|cluster` (or `hlock resolve --backend …`), which
 overrides the manifest's `[backend] target`. The interpreter the worker runs under is
-taken from `$AL_PYTHON` (default `python3`) — pin it to the interpreter that has
+taken from `$HL_PYTHON` (default `python3`) — pin it to the interpreter that has
 `harness-lock` installed.
 
 ```bash
 hlock optimize --backend devbox --depth probe --max-trials 10
-# real LLM calls: export AL_LLM_BASE_URL=http://… AL_LLM_MODEL=qwen-32b [AL_LLM_API_KEY=…]
+# real LLM calls: export HL_LLM_BASE_URL=http://… HL_LLM_MODEL=qwen-32b [HL_LLM_API_KEY=…]
 hlock optimize --backend cluster --depth ft --data user:./runs   # LoRA on a GPU worker
 ```
 

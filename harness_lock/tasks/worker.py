@@ -53,14 +53,14 @@ def _rng(seed: int, salt: int) -> float:
 
 
 def _llm_configured() -> bool:
-    return bool(os.environ.get("AL_LLM_BASE_URL"))
+    return bool(os.environ.get("HL_LLM_BASE_URL"))
 
 
 def _call_real_llm(model: str, prompt: str, temperature: float = 0.2) -> dict | None:
     """Best-effort OpenAI-compatible completion against a served model; None on failure."""
-    base = os.environ.get("AL_LLM_BASE_URL", "").rstrip("/")
-    key = os.environ.get("AL_LLM_API_KEY", "")
-    real_model = os.environ.get("AL_LLM_MODEL", model)
+    base = os.environ.get("HL_LLM_BASE_URL", "").rstrip("/")
+    key = os.environ.get("HL_LLM_API_KEY", "")
+    real_model = os.environ.get("HL_LLM_MODEL", model)
     if not base:
         return None
     try:
@@ -469,7 +469,7 @@ def ft_lora(req: dict) -> dict:
         }
 
     ws = Path(req.get("workdir", "."))
-    base_model = os.environ.get("AL_FT_BASE_MODEL", "Qwen/Qwen2-0.5B")
+    base_model = os.environ.get("HL_FT_BASE_MODEL", "Qwen/Qwen2-0.5B")
     train_shard = ws / "train.jsonl"
     if not train_shard.exists():
         return {
@@ -508,7 +508,7 @@ def ft_lora(req: dict) -> dict:
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
     model.train()
     loss = 0.0
-    steps = int(os.environ.get("AL_FT_STEPS", "3"))
+    steps = int(os.environ.get("HL_FT_STEPS", "3"))
     for _ in range(max(steps, 1)):
         optimizer.zero_grad()
         out = model(input_ids=enc["input_ids"], labels=enc["input_ids"])
@@ -526,7 +526,7 @@ def ft_lora(req: dict) -> dict:
         "result": {
             "success": True,
             "score": 1.0,
-            "cost_usd": round(gpu_h * float(os.environ.get("AL_GPU_COST_PER_H", "2.0")), 4),
+            "cost_usd": round(gpu_h * float(os.environ.get("HL_GPU_COST_PER_H", "2.0")), 4),
             "gpu_h": gpu_h,
             "latency_s": 0.0,
             "steps": max(steps, 1),
@@ -539,7 +539,7 @@ def ft_lora(req: dict) -> dict:
                 "samples": samples,
                 "loss": round(loss, 4),
                 "gpu_h": gpu_h,
-                "cost_usd": round(gpu_h * float(os.environ.get("AL_GPU_COST_PER_H", "2.0")), 4),
+                "cost_usd": round(gpu_h * float(os.environ.get("HL_GPU_COST_PER_H", "2.0")), 4),
                 "adapter_path": str(adapter_dir),
             },
         }

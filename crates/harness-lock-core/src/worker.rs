@@ -153,7 +153,7 @@ impl HarnessAdapter for PythonAdapter {
 /// Used by the tuner (as `PythonAdapter`) for trials and directly by `ops::optimize`
 /// for the data / prompt / fine-tune stages of the pipeline.
 ///
-/// The interpreter is taken from `AL_PYTHON` (falling back to `python3`) so it can
+/// The interpreter is taken from `HL_PYTHON` (falling back to `python3`) so it can
 /// be pinned to the interpreter that actually has `harness_lock` installed (e.g. a
 /// project venv), independent of the interpreter the Rust wheel itself runs inside.
 pub struct PythonWorker {
@@ -163,7 +163,7 @@ pub struct PythonWorker {
 
 impl PythonWorker {
     pub fn new() -> Self {
-        let interp = std::env::var("AL_PYTHON").unwrap_or_else(|_| "python3".to_string());
+        let interp = std::env::var("HL_PYTHON").unwrap_or_else(|_| "python3".to_string());
         PythonWorker {
             interp,
             module: "harness_lock.tasks.worker".to_string(),

@@ -3,7 +3,7 @@
 These prove the seam ``hlock optimize --backend devbox|cluster`` uses: the Rust core
 shells a trial out to the Python worker over a versioned JSON contract and
 consumes the response. They run entirely offline — the worker's LLM call falls
-back to the deterministic reference RNG when no ``AL_LLM_BASE_URL`` is set, and
+back to the deterministic reference RNG when no ``HL_LLM_BASE_URL`` is set, and
 the Flyte lift degrades to in-process when the ``flyte`` SDK is absent.
 """
 
@@ -83,7 +83,7 @@ def test_worker_contract_bad_version():
         ("ft.lora", "available"),
     ],
 )
-def test_worker_contract_handlers(kind, key):
+def test_worker_contract_handlers(kind, key, tmp_path):
     resp = run_worker(
         {
             "version": 1,
@@ -93,7 +93,7 @@ def test_worker_contract_handlers(kind, key):
             "task": {"id": "t", "expected": []},
             "stack": {"llm": {"planner": "reference:qwen-7b"}},
             "seed": 0,
-            "workdir": str(REPO / "tasks"),
+            "workdir": str(tmp_path),
             "plan": {},
         }
     )
@@ -104,7 +104,7 @@ def test_worker_contract_handlers(kind, key):
 def test_optimize_backend_devbox(tmp_path, monkeypatch):
     """End-to-end: Rust core -> Python worker -> harness.opt.lock, offline."""
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("AL_PYTHON", sys.executable)  # pin the interpreter the worker runs under
+    monkeypatch.setenv("HL_PYTHON", sys.executable)  # pin the interpreter the worker runs under
 
     manifest = f"""[project]
 name = "worker-e2e"
@@ -187,8 +187,8 @@ def test_worker_contract_data_load_split():
 def test_optimize_depth_prompt_devbox(tmp_path, monkeypatch):
     """depth=prompt drives the data + prompt.search stages, writing real digests."""
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("AL_PYTHON", sys.executable)
-    monkeypatch.setenv("AL_LLM_BASE_URL", "")  # ensure deterministic reference path
+    monkeypatch.setenv("HL_PYTHON", sys.executable)
+    monkeypatch.setenv("HL_LLM_BASE_URL", "")  # ensure deterministic reference path
 
     manifest = f"""[project]
 name = "prompt-e2e"
