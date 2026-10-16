@@ -1,10 +1,11 @@
 name: publish-cargo
 
-# Publishes `harness-lock-core` to crates.io.
-#
-# The PyO3 bindings crate (`harness-lock`) is built as a Python extension module
-# (`extension-module` feature), so it isn't linkable from Rust and is shipped only
-# as the PyPI wheel; it is marked `publish = false`.
+# Publishes the Rust crates to crates.io, in dependency order:
+#   harness-lock-core  the library
+#   harness-lock       re-exports harness-lock-core (`cargo add harness-lock`)
+#   hlock              the same facade under the short name (`cargo add hlock`)
+# `cargo publish --workspace` orders them and skips the PyO3 bindings crate
+# (`harness-lock-py`, `publish = false`), which ships only inside the PyPI wheel.
 #
 # Release: `python scripts/set_version.py X.Y.Z`, merge to main, then push tag vX.Y.Z.
 #
@@ -13,8 +14,8 @@ name: publish-cargo
 #
 # One-time setup (see RELEASING.md): crates.io has no pending publishers, so the first
 # release needs a `CARGO_REGISTRY_TOKEN` secret in the `crates-io` environment
-# (publish-new + publish-update scopes, limited to `harness-lock*`). After the crate
-# exists, switch to crates.io trusted publishing and delete the token.
+# (publish-new + publish-update scopes, limited to `harness-lock*` and `hlock`). After
+# the crates exist, switch to crates.io trusted publishing and delete the token.
 #
 # crates.io never accepts the same version twice: re-running a tag that already
 # published fails at the publish step. Bump the version instead.
@@ -54,11 +55,11 @@ jobs:
           fi
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: cargo publish --dry-run
-        run: cargo publish --dry-run --locked -p harness-lock-core
+      - name: cargo publish --workspace --dry-run
+        run: cargo publish --workspace --dry-run --locked
 
   publish:
-    name: Publish harness-lock-core
+    name: Publish harness-lock-core, harness-lock, hlock
     needs: verify
     if: github.event_name == 'push' || inputs.dry_run == false
     runs-on: ubuntu-latest
@@ -66,7 +67,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - name: cargo publish
-        run: cargo publish --locked -p harness-lock-core
+      - name: cargo publish --workspace
+        run: cargo publish --workspace --locked
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}

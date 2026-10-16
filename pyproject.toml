@@ -37,7 +37,7 @@ hlock = "harness_lock.cli:main"
 harness-lock = "harness_lock.cli:main"
 
 [tool.maturin]
-manifest-path = "crates/harness-lock/Cargo.toml"
+manifest-path = "crates/harness-lock-py/Cargo.toml"
 module-name = "harness_lock._harness_lock"
 python-source = "."
 

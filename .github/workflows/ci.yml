@@ -33,16 +33,17 @@ jobs:
       - name: Install build deps
         run: pip install maturin click pytest ruff
       - name: Build & install the extension
-        run: maturin develop -m crates/harness-lock/Cargo.toml
+        run: maturin develop -m crates/harness-lock-py/Cargo.toml
       - name: Unit tests
         run: python -m pytest tests -q
       - name: Lint
-        run: ruff check harness_lock tests
+        run: ruff check harness_lock tests packaging/hlock
 
   # Catches a broken release in review rather than at tag time: versions agree, the
-  # wheel and sdist build, pass `twine check`, and the wheel installs and runs.
+  # wheel, sdist, and hlock alias build, pass `twine check`, install, and run, and
+  # all three crates package.
   packaging:
-    name: Packaging (version, wheel, sdist)
+    name: Packaging (version, wheels, crates)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -59,15 +60,20 @@ jobs:
         with:
           command: sdist
           args: --out dist
-      - name: twine check + install smoke test
+      - name: Build the hlock alias package
+        run: |
+          python -m pip install --upgrade build
+          python -m build packaging/hlock --outdir dist
+      - name: twine check + install smoke test (both names)
         run: |
           set -euo pipefail
           python -m pip install --upgrade twine
           twine check dist/*
           python -m venv /tmp/venv
-          /tmp/venv/bin/pip install dist/*.whl
+          # `hlock` pins harness-lock==<same version>, resolved from the local wheel.
+          /tmp/venv/bin/pip install --find-links dist hlock
           /tmp/venv/bin/hlock --version
-          /tmp/venv/bin/python -c "import harness_lock; print(harness_lock.__version__)"
+          /tmp/venv/bin/python -c "import harness_lock, hlock; assert hlock.__version__ == harness_lock.__version__; print(hlock.__version__)"
       - uses: dtolnay/rust-toolchain@stable
-      - name: cargo publish --dry-run (harness-lock-core)
-        run: cargo publish --dry-run --locked -p harness-lock-core
+      - name: cargo publish --workspace --dry-run (harness-lock-core, harness-lock, hlock)
+        run: cargo publish --workspace --dry-run --locked

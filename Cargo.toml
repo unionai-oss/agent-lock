@@ -2,9 +2,11 @@
 resolver = "2"
 members = [
     "crates/harness-lock-core",
+    "crates/harness-lock-py",
     "crates/harness-lock",
+    "crates/hlock",
 ]
-default-members = ["crates/harness-lock-core", "crates/harness-lock"]
+default-members = ["crates/harness-lock-core", "crates/harness-lock-py", "crates/harness-lock", "crates/hlock"]
 
 [workspace.package]
 version = "0.1.0"

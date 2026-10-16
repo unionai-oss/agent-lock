@@ -1,0 +1,36 @@
+# `hlock` is the short PyPI name for `harness-lock`. It contains no code of its own:
+# it pins `harness-lock` to the exact same version and re-exports it as `import hlock`.
+# The `hlock` command itself comes from `harness-lock`.
+#
+# Don't edit the version or the pin by hand: `python scripts/set_version.py X.Y.Z`
+# keeps both in step with the Cargo workspace version.
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hlock"
+version = "0.1.0"
+description = "Short name for harness-lock: lock your agent into place."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Niels Bantilan", email = "niels.bantilan@gmail.com" }]
+keywords = ["agents", "evaluation", "llm", "lockfile", "tuning", "flyte"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = ["harness-lock==0.1.0"]
+
+[project.optional-dependencies]
+flyte = ["harness-lock[flyte]==0.1.0"]
+
+[project.urls]
+Homepage = "https://github.com/unionai-oss/harness-lock"
+Source = "https://github.com/unionai-oss/harness-lock"
+
+[tool.hatch.build.targets.wheel]
+packages = ["hlock"]
