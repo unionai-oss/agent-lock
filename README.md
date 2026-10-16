@@ -4,15 +4,15 @@
 
 `hpm` treats an agent system the way a package manager treats dependencies. You
 bring your domain tasks, the models you're allowed to use, and the harness you
-like. `hpm` searches the stack, measures it, and writes an `agent.lock`: a pinned,
+like. `hpm` searches the stack, measures it, and writes an `hpm.lock`: a pinned,
 version-controlled, enforceable description of the agent that actually works for
 your domain.
 
 | Package manager            | hpm                                                            |
 |----------------------------|----------------------------------------------------------------|
-| `pyproject.toml`           | `agentlock.toml` — the **manifest**: what you allow and require |
+| `pyproject.toml`           | `hpm.toml` — the **manifest**: what you allow and require |
 | dependency resolver        | **tuner**: search over LLMs × decision models × harnesses × policies |
-| `uv.lock`                  | `agent.lock` — the **lockfile**: what was chosen, pinned, hashed, plus the evidence |
+| `uv.lock`                  | `hpm.lock` — the **lockfile**: what was chosen, pinned, hashed, plus the evidence |
 | CI `--locked` check        | `hpm check` — fail if the running stack drifts from the lock |
 
 See `SPEC.md` for the full design (manifest, lockfile schema, component model,
@@ -64,8 +64,8 @@ maturin develop -m crates/hpm/Cargo.toml      # builds + installs the hpm wheel
 ## Quickstart (local, no accounts)
 
 ```bash
-hpm init --name demo --pack ./tasks   # write a starter agentlock.toml
-hpm lock                              # tune the search space -> agent.lock + report
+hpm init --name demo --pack ./tasks   # write a starter hpm.toml
+hpm lock                              # tune the search space -> hpm.lock + report
 hpm show                              # pretty-print the locked stack + evidence
 hpm check                             # static verification (CI-friendly exit code)
 hpm tree                              # component dependency graph
@@ -91,7 +91,7 @@ space = SearchSpace(
 lock = hpm.lock(space, backend="local", workdir=".agentlock")
 print(lock.summary())
 
-agent = hpm.load("agent.lock")
+agent = hpm.load("hpm.lock")
 print(agent.run("clean ./data/orders.csv"))
 ```
 

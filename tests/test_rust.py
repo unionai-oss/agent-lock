@@ -56,11 +56,11 @@ def test_search_space_tune(workspace, monkeypatch):
     assert lf.harness == "reference"
     ev = json.loads(lf.evidence)
     assert ev["trials"] >= 1
-    # agent.lock written at cwd
-    assert (base / "agent.lock").exists()
+    # hpm.lock written at cwd
+    assert (base / "hpm.lock").exists()
 
     # load + run
-    agent = hpm.load(str(base / "agent.lock"))
+    agent = hpm.load(str(base / "hpm.lock"))
     assert agent.summary() != ""
     outcome = json.loads(agent.run("do the demo task"))
     assert "success" in outcome

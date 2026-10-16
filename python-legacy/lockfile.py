@@ -1,4 +1,4 @@
-"""The lockfile: ``agent.lock``.
+"""The lockfile: ``hpm.lock``.
 
 The central artifact. It documents what the agent is and the evidence it works,
 enforces what the runtime must match, and versions/diffs cleanly in git.
@@ -167,7 +167,7 @@ class Lockfile(BaseModel):
         try:
             raw = tomllib.loads(p.read_text("utf-8"))
         except tomllib.TOMLDecodeError as e:  # pragma: no cover - defensive
-            raise LockfileError(f"invalid agent.lock: {e}") from e
+            raise LockfileError(f"invalid hpm.lock: {e}") from e
         return cls.from_dict(raw)
 
     @classmethod
@@ -197,7 +197,7 @@ class Lockfile(BaseModel):
                 provenance=Provenance(**raw.get("provenance", {})),
             )
         except (ValueError, TypeError) as e:
-            raise LockfileError(f"invalid agent.lock: {e}") from e
+            raise LockfileError(f"invalid hpm.lock: {e}") from e
         return lf
 
     def to_dict(self) -> dict[str, Any]:

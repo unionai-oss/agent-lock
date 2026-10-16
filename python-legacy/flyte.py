@@ -80,8 +80,8 @@ def run_search(tuner, candidates, backend: Any) -> list[Any]:
     asyncio.run(flyte.init(**cfg))
     pipeline = build_pipeline()
     run = pipeline["run"]
-    asyncio.run(flyte.run(run, str(tuner.manifest.source_path or "agentlock.toml"), "local"))
-    # The pipeline wrote agent.lock; reconstruct TrialResults would require pulling a
+    asyncio.run(flyte.run(run, str(tuner.manifest.source_path or "hpm.toml"), "local"))
+    # The pipeline wrote hpm.lock; reconstruct TrialResults would require pulling a
     # remote artifact — for now report an empty sweep and let the driver read the lock.
     return []
 

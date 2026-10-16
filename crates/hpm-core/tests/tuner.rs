@@ -1,5 +1,5 @@
 //! End-to-end tuner test: build a temp task pack, run `Tuner::tune`, and check
-//! the produced `agent.lock`.
+//! the produced `hpm.lock`.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -92,8 +92,8 @@ fn tune_writes_a_lock() {
     let lock = tuner.tune().unwrap();
 
     // lock is written at cwd
-    let lock_path = base.join("agent.lock");
-    assert!(lock_path.exists(), "agent.lock should be written at cwd");
+    let lock_path = base.join("hpm.lock");
+    assert!(lock_path.exists(), "hpm.lock should be written at cwd");
     assert_eq!(lock.harness.name, "reference");
     assert!(lock.evidence.trials >= 2);
 

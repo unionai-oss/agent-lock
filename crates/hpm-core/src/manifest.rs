@@ -1,4 +1,4 @@
-//! The manifest: `agentlock.toml`.
+//! The manifest: `hpm.toml`.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -132,14 +132,14 @@ impl Manifest {
         let text = std::fs::read_to_string(path)
             .map_err(|e| Error::Manifest(format!("cannot read {}: {e}", path.display())))?;
         let mut m: Manifest = toml::from_str(&text)
-            .map_err(|e| Error::Manifest(format!("invalid agentlock.toml: {e}")))?;
+            .map_err(|e| Error::Manifest(format!("invalid hpm.toml: {e}")))?;
         m.source_path = Some(path.to_path_buf());
         Ok(m)
     }
 
     /// Parse from an in-memory TOML string.
     pub fn from_str(text: &str) -> Result<Manifest> {
-        toml::from_str(text).map_err(|e| Error::Manifest(format!("invalid agentlock.toml: {e}")))
+        toml::from_str(text).map_err(|e| Error::Manifest(format!("invalid hpm.toml: {e}")))
     }
 
     pub fn name(&self) -> String {

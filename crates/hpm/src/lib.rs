@@ -21,7 +21,7 @@ fn py_err(e: core::Error) -> PyErr {
 // --------------------------------------------------------------------------- //
 // Manifest
 // --------------------------------------------------------------------------- //
-/// A parsed `agentlock.toml`.
+/// A parsed `hpm.toml`.
 #[pyclass(module = "hpm", name = "Manifest")]
 #[derive(Clone)]
 pub struct PyManifest {
@@ -417,7 +417,7 @@ fn resolve_manifest(py: Python<'_>, manifest: Option<PyObject>, backend: Option<
                 ));
             }
         }
-        None => core::Manifest::load(Path::new("agentlock.toml")).map_err(py_err)?,
+        None => core::Manifest::load(Path::new("hpm.toml")).map_err(py_err)?,
     };
     if let Some(b) = backend {
         m.backend.insert("target".to_string(), serde_json::json!(b));

@@ -1,4 +1,4 @@
-"""Scaffolding: render a starter ``agentlock.toml`` (``hpm init``)."""
+"""Scaffolding: render a starter ``hpm.toml`` (``hpm init``)."""
 
 from __future__ import annotations
 

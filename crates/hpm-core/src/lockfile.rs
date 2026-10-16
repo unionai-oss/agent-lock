@@ -1,4 +1,4 @@
-//! The lockfile: `agent.lock`.
+//! The lockfile: `hpm.lock`.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -225,7 +225,7 @@ impl Lockfile {
             .collect::<Vec<_>>()
             .join("\n");
         let lf: Lockfile =
-            toml::from_str(&body).map_err(|e| Error::Lockfile(format!("invalid agent.lock: {e}")))?;
+            toml::from_str(&body).map_err(|e| Error::Lockfile(format!("invalid hpm.lock: {e}")))?;
         if lf.lock_version != LOCK_VERSION {
             return Err(Error::Lockfile(format!(
                 "unsupported lock-version {} (this build supports {})",

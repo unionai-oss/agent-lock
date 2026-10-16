@@ -1,4 +1,4 @@
-"""The tuner: turns a manifest into an ``agent.lock``.
+"""The tuner: turns a manifest into an ``hpm.lock``.
 
 Search over candidate stacks, run trials, grade, select a winner from the Pareto
 front, and serialize the resolved stack plus evidence. Runs on the local backend by
@@ -168,7 +168,7 @@ class Tuner:
 
         # write the lock
         lock = _build_lockfile(self, winner, scores)
-        lock.save("agent.lock")
+        lock.save("hpm.lock")
         self._write_report(lock, scores)
         return lock
 

@@ -25,12 +25,12 @@ def main() -> None:
 @click.option("--pack", default="./tasks", show_default=True)
 @click.option("--force", is_flag=True)
 def init(name: str, pack: str, force: bool) -> None:
-    """Write a starter agentlock.toml manifest."""
+    """Write a starter hpm.toml manifest."""
     from pathlib import Path
 
-    p = Path("agentlock.toml")
+    p = Path("hpm.toml")
     if p.exists() and not force:
-        click.echo("agentlock.toml already exists (use --force to overwrite)")
+        click.echo("hpm.toml already exists (use --force to overwrite)")
         sys.exit(1)
     p.write_text(_default_manifest(name, pack))
     click.echo(f"wrote {p}")
@@ -40,24 +40,24 @@ def init(name: str, pack: str, force: bool) -> None:
 @click.option("--backend", default=None, help="local | devbox | cluster")
 @click.option("--workdir", default=None, help="Where to put .agentlock artifacts")
 def lock(backend: str | None, workdir: str | None) -> None:
-    """Tune the search space and write agent.lock."""
-    lf = _lock("agentlock.toml", backend=backend, workdir=workdir or ".agentlock")
-    click.echo("wrote agent.lock")
+    """Tune the search space and write hpm.lock."""
+    lf = _lock("hpm.toml", backend=backend, workdir=workdir or ".agentlock")
+    click.echo("wrote hpm.lock")
     click.echo(lf.summary())
 
 
 @main.command()
 def show() -> None:
     """Pretty-print the locked stack and evidence."""
-    lf = Lockfile.load("agent.lock")
+    lf = Lockfile.load("hpm.lock")
     click.echo(_render(lf))
 
 
 @main.command()
 def check() -> None:
     """Static verification (CI-friendly exit code)."""
-    m = Manifest.load("agentlock.toml")
-    lf = Lockfile.load("agent.lock")
+    m = Manifest.load("hpm.toml")
+    lf = Lockfile.load("hpm.lock")
     if lf.manifest_hash is None:
         click.echo("FAIL: lock has no manifest-hash")
         sys.exit(1)
@@ -74,7 +74,7 @@ def tree() -> None:
     """Print the locked component dependency graph."""
     import json as _json
 
-    lf = Lockfile.load("agent.lock")
+    lf = Lockfile.load("hpm.lock")
     click.echo(f"[stack] {lf.harness}")
     for role, spec in _json.loads(lf.llm):
         click.echo(f"  ├─ [llm:{role}] {spec}")
@@ -88,7 +88,7 @@ def run(prompt: str) -> None:
     """Run the locked agent on a prompt (with the Rust runtime guard)."""
     import json
 
-    agent = load("agent.lock")
+    agent = load("hpm.lock")
     outcome = json.loads(agent.run(prompt))
     ok = bool(outcome.get("success"))
     click.echo(f"success={ok} model={outcome.get('model')} cost=${outcome.get('cost_usd', 0):.4f}")
@@ -104,10 +104,10 @@ def backend() -> None:
 def backend_status() -> None:
     """Report the active backend."""
     try:
-        m = Manifest.load("agentlock.toml")
+        m = Manifest.load("hpm.toml")
         click.echo(f"configured backend (manifest): {m.backend}")
     except Exception:  # noqa: BLE001 - manifest may be absent
-        click.echo("configured backend (manifest): local (no agentlock.toml)")
+        click.echo("configured backend (manifest): local (no hpm.toml)")
 
 
 def _default_manifest(name: str, pack: str) -> str:
@@ -147,7 +147,7 @@ def _render(lf) -> str:
 
     ev = _json.loads(lf.evidence)
     lines = [
-        f"agent.lock  (lock-version {LOCK_VERSION})",
+        f"hpm.lock  (lock-version {LOCK_VERSION})",
         "",
         f"harness     {lf.harness}",
         f"summary     {lf.summary()}",

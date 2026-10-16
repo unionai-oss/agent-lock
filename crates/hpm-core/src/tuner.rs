@@ -1,4 +1,4 @@
-//! The tuner: turns a manifest into an `agent.lock`.
+//! The tuner: turns a manifest into an `hpm.lock`.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -135,7 +135,7 @@ impl Tuner {
         }
     }
 
-    /// Tune: enumerate, run, aggregate, select, and write `agent.lock`.
+    /// Tune: enumerate, run, aggregate, select, and write `hpm.lock`.
     pub fn tune(&mut self) -> Result<Lockfile> {
         let search_tasks = self.load_packs();
         let stacks = self.enumerate_stacks();

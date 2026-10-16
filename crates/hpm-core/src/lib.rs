@@ -30,9 +30,9 @@ pub use manifest::Manifest;
 pub use store::Store;
 pub use tuner::Tuner;
 
-/// Schema version of the `agent.lock` lockfile.
+/// Schema version of the `hpm.lock` lockfile.
 pub const LOCK_VERSION: i64 = 1;
 /// Default output filename for the lockfile.
-pub const LOCKFILE_PATH: &str = "agent.lock";
+pub const LOCKFILE_PATH: &str = "hpm.lock";
 /// Default manifest filename.
-pub const MANIFEST_PATH: &str = "agentlock.toml";
+pub const MANIFEST_PATH: &str = "hpm.toml";
