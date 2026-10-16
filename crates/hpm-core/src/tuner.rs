@@ -80,6 +80,8 @@ impl Tuner {
                         instructions: instructions_files(&self.manifest.instructions),
                         max_steps: 40,
                         max_cost_usd_per_task: None,
+                        retries: policy_axis(&self.manifest.candidates.policy, "retries", 0),
+                        temperature: policy_axis_float(&self.manifest.candidates.policy, "temperature"),
                     });
                 }
             }
@@ -337,4 +339,20 @@ fn instructions_files(ins: &BTreeMap<String, serde_json::Value>) -> Vec<String> 
         .and_then(serde_json::Value::as_array)
         .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
         .unwrap_or_default()
+}
+
+fn policy_axis(policy: &BTreeMap<String, Vec<serde_json::Value>>, key: &str, default: u32) -> u32 {
+    policy
+        .get(key)
+        .and_then(|v| v.first())
+        .and_then(serde_json::Value::as_u64)
+        .map(|n| n as u32)
+        .unwrap_or(default)
+}
+
+fn policy_axis_float(policy: &BTreeMap<String, Vec<serde_json::Value>>, key: &str) -> Option<f64> {
+    policy
+        .get(key)
+        .and_then(|v| v.first())
+        .and_then(serde_json::Value::as_f64)
 }

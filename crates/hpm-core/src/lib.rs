@@ -14,6 +14,7 @@ pub mod error;
 pub mod hash;
 pub mod lockfile;
 pub mod manifest;
+pub mod ops;
 pub mod providers;
 pub mod search;
 pub mod store;

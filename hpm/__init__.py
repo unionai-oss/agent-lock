@@ -14,6 +14,8 @@ from ._hpm import (
     __version__,
     load,
     lock,
+    optimize,
+    upgrade,
 )
 
 __all__ = [
@@ -27,4 +29,6 @@ __all__ = [
     "__version__",
     "load",
     "lock",
+    "optimize",
+    "upgrade",
 ]

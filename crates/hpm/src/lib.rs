@@ -7,7 +7,7 @@
 //! Dict-shaped data is exchanged as canonical JSON strings to keep the binding
 //! surface small and robust.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -425,6 +425,74 @@ fn resolve_manifest(py: Python<'_>, manifest: Option<PyObject>, backend: Option<
     Ok(m)
 }
 
+#[pyfunction]
+#[pyo3(signature = (manifest=None, to=None, all=false, apply=false, rollback=false, force=false, workdir=None))]
+fn upgrade(
+    py: Python<'_>,
+    manifest: Option<PyObject>,
+    to: Option<String>,
+    all: bool,
+    apply: bool,
+    rollback: bool,
+    force: bool,
+    workdir: Option<String>,
+) -> PyResult<String> {
+    let m = resolve_manifest(py, manifest, None)?;
+    let spec = core::ops::UpgradeSpec {
+        to,
+        all,
+        apply,
+        rollback,
+        force,
+        workdir: PathBuf::from(workdir.unwrap_or_else(|| ".agentlock".to_string())),
+    };
+    let o = core::ops::upgrade(m, &spec).map_err(py_err)?;
+    Ok(serde_json::json!({
+        "plan": o.plan,
+        "applied": o.applied,
+        "rolled_back": o.rolled_back,
+        "before": o.before,
+        "after": o.after,
+        "lock_path": o.lock_path.to_string_lossy(),
+        "message": o.message,
+    })
+    .to_string())
+}
+
+#[pyfunction]
+#[pyo3(signature = (manifest=None, depth="auto".to_string(), data="user".to_string(), harness=None, out=None, strict=false, apply=false, max_trials=None, workdir=None))]
+fn optimize(
+    py: Python<'_>,
+    manifest: Option<PyObject>,
+    depth: String,
+    data: String,
+    harness: Option<String>,
+    out: Option<String>,
+    strict: bool,
+    apply: bool,
+    max_trials: Option<usize>,
+    workdir: Option<String>,
+) -> PyResult<String> {
+    let m = resolve_manifest(py, manifest, None)?;
+    let spec = core::ops::OptimizeSpec {
+        depth,
+        data,
+        harness,
+        out: PathBuf::from(out.unwrap_or_else(|| "harness.opt.lock".to_string())),
+        strict,
+        apply,
+        max_trials,
+        workdir: PathBuf::from(workdir.unwrap_or_else(|| ".agentlock".to_string())),
+    };
+    let o = core::ops::optimize(m, &spec).map_err(py_err)?;
+    Ok(serde_json::json!({
+        "path": o.path.to_string_lossy(),
+        "report": o.report,
+        "summary": o.lock.summary(),
+    })
+    .to_string())
+}
+
 #[pymodule]
 fn _hpm(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyManifest>()?;
@@ -435,6 +503,8 @@ fn _hpm(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyLockedAgent>()?;
     m.add_function(wrap_pyfunction!(lock, m)?)?;
     m.add_function(wrap_pyfunction!(load, m)?)?;
+    m.add_function(wrap_pyfunction!(upgrade, m)?)?;
+    m.add_function(wrap_pyfunction!(optimize, m)?)?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add("LOCK_VERSION", core::LOCK_VERSION)?;
     Ok(())

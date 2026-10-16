@@ -18,6 +18,12 @@ pub struct Stack {
     pub instructions: Vec<String>,
     pub max_steps: u32,
     pub max_cost_usd_per_task: Option<f64>,
+    /// Number of agent-level retries (a policy under test; the reference harness
+    /// retries a "failed" step up to this many times, so more retries raise
+    /// success at the cost of more tokens/latency).
+    pub retries: u32,
+    /// Sampling temperature (recorded; the reference harness is deterministic).
+    pub temperature: Option<f64>,
 }
 
 impl Default for Stack {
@@ -32,6 +38,8 @@ impl Default for Stack {
             instructions: Vec::new(),
             max_steps: 40,
             max_cost_usd_per_task: None,
+            retries: 0,
+            temperature: None,
         }
     }
 }
@@ -52,6 +60,8 @@ impl Stack {
             "skills": sorted_list(&self.skills),
             "instructions": sorted_list(&self.instructions),
             "max_steps": self.max_steps,
+            "retries": self.retries,
+            "temperature": self.temperature,
         })
     }
 

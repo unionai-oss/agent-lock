@@ -12,6 +12,8 @@ import click
 
 from hpm import LOCK_VERSION, Lockfile, Manifest, __version__, load
 from hpm import lock as _lock
+from hpm import optimize as hpm_optimize
+from hpm import upgrade as hpm_upgrade
 
 
 @click.group()
@@ -93,6 +95,55 @@ def run(prompt: str) -> None:
     ok = bool(outcome.get("success"))
     click.echo(f"success={ok} model={outcome.get('model')} cost=${outcome.get('cost_usd', 0):.4f}")
     sys.exit(0 if ok else 1)
+
+
+@main.command()
+@click.option("--to", default=None, help="target model/version to upgrade to")
+@click.option("--all", is_flag=True, help="upgrade every upgradeable component")
+@click.option("--apply", is_flag=True, help="perform the upgrade (default is plan-only)")
+@click.option("--rollback", is_flag=True, help="restore hpm.lock from hpm.lock.prev")
+@click.option("--force", is_flag=True, help="apply even if success-rate regresses")
+@click.option("--workdir", default=None)
+def upgrade(to: str | None, all: bool, apply: bool, rollback: bool, force: bool, workdir: str | None) -> None:
+    """Upgrade all or a subset of locked components; plan -> apply -> rollback (§5.8)."""
+    import json as _json
+
+    result = _json.loads(
+        hpm_upgrade(to=to, all=all, apply=apply, rollback=rollback, force=force, workdir=workdir)
+    )
+    for item in result.get("plan", {}).get("upgradeable", []):
+        click.echo(f"  {item['role']}: {item['from']} -> {item['to']}")
+    click.echo(result.get("message", ""))
+    if result.get("applied"):
+        click.echo(f"  after success-rate: {result.get('after'):.2f} (prev kept at hpm.lock.prev)")
+
+
+@main.command()
+@click.option("--depth", default="auto",
+              type=click.Choice(["probe", "prompt", "hpo", "ft", "full", "auto"]), help="how deep to optimize")
+@click.option("--data", default="user", help="user | user:<paths> | synthetic[:n] | hub:<pack>")
+@click.option("--harness", default=None)
+@click.option("--out", default="harness.opt.lock", help="output opt-lock filename (user-renamable)")
+@click.option("--strict", is_flag=True, help="fail unless the opt lock beats the base")
+@click.option("--apply", is_flag=True, help="also adopt the result into hpm.lock")
+@click.option("--max-trials", default=None, type=int)
+@click.option("--workdir", default=None)
+def optimize(depth: str, data: str, harness: str | None, out: str, strict: bool, apply: bool, max_trials: int | None, workdir: str | None) -> None:
+    """Optimize the harness -> harness.opt.lock (§5.9, §8.5)."""
+    import json as _json
+
+    result = _json.loads(
+        hpm_optimize(depth=depth, data=data, harness=harness, out=out, strict=strict, apply=apply, max_trials=max_trials, workdir=workdir)
+    )
+    r = result.get("report", {})
+    click.echo(f"wrote {result.get('path')}")
+    click.echo(f"  depth={r.get('depth')} grid={r.get('grid')} best={r.get('best')}")
+    click.echo(f"  baseline success={r.get('baseline_success_rate'):.2f} -> "
+               f"optimized={r.get('best', {}).get('success_rate'):.2f} (gain {r.get('gain_success_rate'):+.2f})")
+    if result.get("summary"):
+        click.echo(f"  summary: {result['summary']}")
+    if apply:
+        click.echo("  adopted into hpm.lock")
 
 
 @main.group()

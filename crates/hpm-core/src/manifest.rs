@@ -51,8 +51,10 @@ pub struct Candidates {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(default, rename_all = "kebab-case")]
+#[serde(default)]
 pub struct LLMCandidate {
+    /// Manifest candidates may spell this `any_of` (underscore) or `any-of`.
+    #[serde(alias = "any-of")]
     pub any_of: Vec<String>,
 }
 

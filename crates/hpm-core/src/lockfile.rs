@@ -185,6 +185,13 @@ pub struct Lockfile {
     pub verify: Verify,
     #[serde(default)]
     pub provenance: Provenance,
+    /// Optimization-only fields (see §5.9 / `harness.opt.lock`).
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "base-lock")]
+    pub base_lock: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub optimize: Option<serde_json::Value>,
 }
 
 impl Default for Lockfile {
@@ -206,6 +213,9 @@ impl Default for Lockfile {
             evidence: Evidence::default(),
             verify: Verify::default(),
             provenance: Provenance::default(),
+            base_lock: None,
+            kind: None,
+            optimize: None,
         }
     }
 }

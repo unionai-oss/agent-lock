@@ -74,3 +74,48 @@ def test_manifest_load_write(tmp_path):
     assert m.name == "m"
     assert m.backend == "local"
     assert "sha256:" in m.manifest_hash()
+
+
+def test_upgrade_and_optimize(tmp_path, monkeypatch):
+    """hpm upgrade (plan/apply/rollback) and hpm optimize via the bindings."""
+    import json as _json
+
+    # a local task pack
+    ws = tmp_path / "ws"
+    (ws / "t1").mkdir(parents=True)
+    (ws / "t1" / "prompt.md").write_text("write summary.md")
+    (ws / "pack.toml").write_text(
+        "[pack]\nname='t/p'\nversion='0.1.0'\ndomain='d'\n\n"
+        "[[task]]\nid='s'\nprompt='t1/prompt.md'\nexpected={artifacts=['summary.md']}\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    manifest = (
+        "[project]\nname='ops'\n"
+        f"[tasks]\npacks=['{ws}']\nseeds=1\n"
+        "[candidates.llm.planner]\nany_of=['reference:qwen-7b','reference:qwen-32b']\n"
+        "[candidates]\nharness=['reference']\ndecision=['none']\n"
+        "[objective]\nprimary='success-rate'\nselect='max-quality'\n"
+        "[objective.constraints]\nsuccess-rate='>=0.5'\n[budget]\nstrategy='grid'\n"
+    )
+    (tmp_path / "hpm.toml").write_text(manifest)
+
+    hpm.lock(manifest="hpm.toml", backend="local", workdir=str(tmp_path / ".agentlock"))
+    assert (tmp_path / "hpm.lock").exists()
+
+    plan = _json.loads(hpm.upgrade(manifest="hpm.toml", all=True))
+    assert plan["plan"]["upgradeable"] and plan["plan"]["upgradeable"][0]["to"] == "qwen-32b"
+
+    applied = _json.loads(hpm.upgrade(manifest="hpm.toml", all=True, apply=True))
+    assert applied["applied"] is True
+    assert (tmp_path / "hpm.lock.prev").exists()
+
+    rolled = _json.loads(hpm.upgrade(manifest="hpm.toml", rollback=True))
+    assert rolled["rolled_back"] is True
+
+    opt = _json.loads(hpm.optimize(manifest="hpm.toml", depth="hpo", out=str(tmp_path / "harness.opt.lock")))
+    assert (tmp_path / "harness.opt.lock").exists()
+    assert opt["report"]["depth"] == "hpo"
+    # reload the opt lock and confirm it is marked optimized
+    opt_lock = hpm.Lockfile.load(str(tmp_path / "harness.opt.lock"))
+    assert "optimized" in opt_lock.to_json() or opt_lock.harness
+    assert opt["summary"] != ""

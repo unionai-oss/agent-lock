@@ -69,18 +69,27 @@ impl HarnessAdapter for ReferenceAdapter {
         let mut events = Vec::new();
 
         for step in 0..stack.max_steps {
-            let r = provider.complete(&model, 1);
-            cost += r.cost_usd;
-            latency += r.latency_ms / 1000.0;
-            events.push(json!({
-                "type": "llm.call",
-                "role": "planner",
-                "model": model.clone(),
-                "usage": {"input_tokens": r.usage.input_tokens, "output_tokens": r.usage.output_tokens},
-                "cost_usd": r.cost_usd,
-                "latency_ms": r.latency_ms,
-            }));
-            if r.content.starts_with("ANSWER_OK") {
+            // agent-level retries: attempt this step up to 1+retries times
+            let max_attempts = (stack.retries + 1) as usize;
+            let mut any_ok = false;
+            for _attempt in 0..max_attempts {
+                let r = provider.complete(&model, 1);
+                cost += r.cost_usd;
+                latency += r.latency_ms / 1000.0;
+                events.push(json!({
+                    "type": "llm.call",
+                    "role": "planner",
+                    "model": model.clone(),
+                    "usage": {"input_tokens": r.usage.input_tokens, "output_tokens": r.usage.output_tokens},
+                    "cost_usd": r.cost_usd,
+                    "latency_ms": r.latency_ms,
+                }));
+                if r.content.starts_with("ANSWER_OK") {
+                    any_ok = true;
+                    break;
+                }
+            }
+            if any_ok {
                 for art in &expected {
                     let out = workspace.join(art);
                     if let Some(parent) = out.parent() {
