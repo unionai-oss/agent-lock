@@ -19,7 +19,7 @@ def _require_flyte():
         import flyte  # noqa: F401
     except ImportError as e:  # pragma: no cover - depends on extras
         raise RuntimeError(
-            "the Flyte backend needs the `flyte` SDK: `pip install agent-lock[flyte]`; "
+            "the Flyte backend needs the `flyte` SDK: `pip install harness-lock[flyte]`; "
             "fall back to --backend local otherwise"
         ) from e
     return __import__("flyte")
@@ -29,11 +29,11 @@ def envs():
     """Return the standard TaskEnvironments (core, trial, grade, train, serve)."""
     import flyte
 
-    core = flyte.TaskEnvironment(name="agent_lock_core")
+    core = flyte.TaskEnvironment(name="harness_lock_core")
     trial = flyte.TaskEnvironment(
         name="al_trial",
         image=flyte.Image.from_debian_base(python_version=(3, 12)).with_pip_packages(
-            "agent-lock", "pydantic", "python-frontmatter", "PyYAML",
+            "harness-lock", "pydantic", "python-frontmatter", "PyYAML",
         ),
     )
     return {
@@ -54,7 +54,7 @@ def build_pipeline():
 
     @env.task(cache="auto")
     async def lock_pipeline(manifest_path: str, backend: str = "local") -> dict[str, Any]:
-        from al.api import lock
+        from hlock.api import lock
 
         lf = lock(manifest_path, backend=backend)
         return lf.to_dict()
@@ -80,8 +80,8 @@ def run_search(tuner, candidates, backend: Any) -> list[Any]:
     asyncio.run(flyte.init(**cfg))
     pipeline = build_pipeline()
     run = pipeline["run"]
-    asyncio.run(flyte.run(run, str(tuner.manifest.source_path or "hpm.toml"), "local"))
-    # The pipeline wrote hpm.lock; reconstruct TrialResults would require pulling a
+    asyncio.run(flyte.run(run, str(tuner.manifest.source_path or "harnesslock.toml"), "local"))
+    # The pipeline wrote harness.lock; reconstruct TrialResults would require pulling a
     # remote artifact — for now report an empty sweep and let the driver read the lock.
     return []
 

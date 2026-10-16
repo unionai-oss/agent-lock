@@ -13,7 +13,7 @@ from typing import Any
 
 import tomllib
 
-from al.errors import AgentLockError, sha256_file
+from hlock.errors import AgentLockError, sha256_file
 
 
 class TaskError(AgentLockError):

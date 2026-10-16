@@ -1,8 +1,8 @@
-//! Operational commands built on the tuner: `al upgrade` (§5.8) and
-//! `al optimize` (§5.9, §8.5).
+//! Operational commands built on the tuner: `hlock upgrade` (§5.8) and
+//! `hlock optimize` (§5.9, §8.5).
 //!
 //! - **upgrade** moves locked components to newer/breaking versions, keeping a
-//!   `hpm.lock.prev` for `--rollback`, and gates the apply on evidence not
+//!   `harness.lock.prev` for `--rollback`, and gates the apply on evidence not
 //!   regressing.
 //! - **optimize** is the compute-heavy step: it searches hyperparameter/decision
 //!   axes (and, at deeper depths, records prompt edits and fine-tuning) to produce
@@ -56,11 +56,11 @@ pub struct UpgradeSpec {
     pub all: bool,
     /// Perform the apply (default is plan/dry-run).
     pub apply: bool,
-    /// Restore `hpm.lock` from `hpm.lock.prev`.
+    /// Restore `harness.lock` from `harness.lock.prev`.
     pub rollback: bool,
     /// Skip the evidence gate (apply even if success-rate regresses).
     pub force: bool,
-    /// Where `.agentlock/` store + runs live.
+    /// Where `.harnesslock/` store + runs live.
     pub workdir: PathBuf,
 }
 
@@ -104,7 +104,7 @@ fn model_of(spec: &str) -> String {
     spec.rsplit_once(':').map(|(_, m)| m.to_string()).unwrap_or_else(|| spec.to_string())
 }
 
-/// `al upgrade`. `manifest` should be loaded from `hpm.toml`.
+/// `hlock upgrade`. `manifest` should be loaded from `harnesslock.toml`.
 pub fn upgrade(manifest: Manifest, spec: &UpgradeSpec) -> Result<UpgradeOutcome> {
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let lock_path = cwd.join(LOCKFILE_PATH);
@@ -127,11 +127,11 @@ pub fn upgrade(manifest: Manifest, spec: &UpgradeSpec) -> Result<UpgradeOutcome>
         if prev_path.exists() {
             std::fs::copy(&prev_path, &lock_path)?;
             outcome.rolled_back = true;
-            outcome.message = "restored the previous hpm.lock from hpm.lock.prev".into();
+            outcome.message = "restored the previous harness.lock from harness.lock.prev".into();
             outcome.after = Lockfile::load(&lock_path).ok().map(|l| baseline_sr(&l));
             return Ok(outcome);
         }
-        return Err(Error::Tuning("hpm.lock.prev not found — nothing to roll back".into()));
+        return Err(Error::Tuning("harness.lock.prev not found — nothing to roll back".into()));
     }
 
     // ---- plan only (dry-run) ----
@@ -157,7 +157,7 @@ pub fn upgrade(manifest: Manifest, spec: &UpgradeSpec) -> Result<UpgradeOutcome>
     let target = upgradeable[0].get("to").and_then(serde_json::Value::as_str).unwrap_or(latest_model()).to_string();
     let spec_str = "reference:".to_string() + &target;
     if lock_path.exists() {
-        std::fs::copy(&lock_path, &prev_path)?; // keep hpm.lock.prev for --rollback
+        std::fs::copy(&lock_path, &prev_path)?; // keep harness.lock.prev for --rollback
     }
     let mut derived = manifest.clone();
     let mut cand = crate::manifest::Candidates::default();
@@ -193,7 +193,7 @@ pub fn upgrade(manifest: Manifest, spec: &UpgradeSpec) -> Result<UpgradeOutcome>
     }
     outcome.applied = true;
     outcome.message = format!(
-        "upgraded planner to {target}: success-rate {:.2} -> {:.2}. previous lock kept at hpm.lock.prev.",
+        "upgraded planner to {target}: success-rate {:.2} -> {:.2}. previous lock kept at harness.lock.prev.",
         before.unwrap_or(0.0),
         after
     );
@@ -235,7 +235,7 @@ impl Default for OptimizeSpec {
             apply: false,
             max_trials: None,
             backend: None,
-            workdir: PathBuf::from(".agentlock"),
+            workdir: PathBuf::from(".harnesslock"),
         }
     }
 }
@@ -278,7 +278,7 @@ fn search_grid(manifest: &Manifest, depth: &str) -> Vec<(String, u32)> {
     out
 }
 
-/// `al optimize` -> `harness.opt.lock` (§5.9).
+/// `hlock optimize` -> `harness.opt.lock` (§5.9).
 pub fn optimize(manifest: Manifest, spec: &OptimizeSpec) -> Result<OptimizeOutcome> {
     let depth = spec.resolved_depth().to_string();
     let backend = crate::worker::Backend::parse(
@@ -372,7 +372,7 @@ pub fn optimize(manifest: Manifest, spec: &OptimizeSpec) -> Result<OptimizeOutco
         retries: br,
         temperature: Some(0.2),
     };
-    let opt_lock = build_optimized_lock(
+    let opt_lock = build_optimized_resolve(
         &manifest,
         winner_stack,
         bs,
@@ -421,7 +421,7 @@ pub struct OptimizeOutcome {
     pub report: serde_json::Value,
 }
 
-fn build_optimized_lock(
+fn build_optimized_resolve(
     manifest: &Manifest,
     stack: Stack,
     success: f64,
@@ -457,7 +457,7 @@ fn build_optimized_lock(
     if depth == "ft" || depth == "full" {
         finetune.push(serde_json::json!({
             "target": "decision",
-            "base": "hf://al/decider-1.5b",
+            "base": "hf://hlock/decider-1.5b",
             "data": format!("traces://{data_arg}"),
             "adapter": {"lora": "store://sha256:PLAN"},
             "samples": 0,

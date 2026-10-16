@@ -1,6 +1,6 @@
 name: publish-cargo
 
-# Publishes the Rust crates (`agent-lock-core`, `agent-lock`) to crates.io.
+# Publishes the Rust crates (`harness-lock-core`, `harness-lock`) to crates.io.
 #
 # Setup (once, in Settings > Secrets and variables > Actions):
 #   - `CARGO_REGISTRY_TOKEN`: a crates.io API token with "publish-new" +
@@ -16,28 +16,28 @@ on:
 
 jobs:
   publish-crates:
-    name: cargo publish (agent-lock-core, agent-lock)
+    name: cargo publish (harness-lock-core, harness-lock)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Dry-run agent-lock-core
-        run: cargo publish --dry-run --manifest-path crates/agent-lock-core/Cargo.toml
+      - name: Dry-run harness-lock-core
+        run: cargo publish --dry-run --manifest-path crates/harness-lock-core/Cargo.toml
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
-      - name: Publish agent-lock-core (dependency first)
-        run: cargo publish --manifest-path crates/agent-lock-core/Cargo.toml
+      - name: Publish harness-lock-core (dependency first)
+        run: cargo publish --manifest-path crates/harness-lock-core/Cargo.toml
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
-      - name: Dry-run agent-lock
-        run: cargo publish --dry-run --manifest-path crates/agent-lock/Cargo.toml
+      - name: Dry-run harness-lock
+        run: cargo publish --dry-run --manifest-path crates/harness-lock/Cargo.toml
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
-      - name: Publish agent-lock (depends on agent-lock-core)
-        run: cargo publish --manifest-path crates/agent-lock/Cargo.toml
+      - name: Publish harness-lock (depends on harness-lock-core)
+        run: cargo publish --manifest-path crates/harness-lock/Cargo.toml
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}

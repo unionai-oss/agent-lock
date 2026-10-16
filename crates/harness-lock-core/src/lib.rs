@@ -1,4 +1,4 @@
-//! Core library for **agent-lock** (`al`).
+//! Core library for **harness-lock** (`hlock`).
 //!
 //! Implements the manifest, the lockfile, the content-addressed store, task
 //! packs, the deterministic reference provider/harness, the search layer, and
@@ -34,9 +34,9 @@ pub use store::Store;
 pub use tuner::Tuner;
 pub use worker::Backend;
 
-/// Schema version of the `hpm.lock` lockfile.
+/// Schema version of the `harness.lock` lockfile.
 pub const LOCK_VERSION: i64 = 1;
 /// Default output filename for the lockfile.
-pub const LOCKFILE_PATH: &str = "hpm.lock";
+pub const LOCKFILE_PATH: &str = "harness.lock";
 /// Default manifest filename.
-pub const MANIFEST_PATH: &str = "hpm.toml";
+pub const MANIFEST_PATH: &str = "harnesslock.toml";

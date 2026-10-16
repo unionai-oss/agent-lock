@@ -1,10 +1,10 @@
-"""Python worker for agent-lock's heavy tuning work items.
+"""Python worker for harness-lock's heavy tuning work items.
 
-Invoked out-of-process by the Rust core (``al``) over a versioned JSON contract:
+Invoked out-of-process by the Rust core (``hlock``) over a versioned JSON contract:
 
-    python -m agent_lock.tasks.worker <request.json> <response.json>
+    python -m harness_lock.tasks.worker <request.json> <response.json>
 
-Each handler owns one ecosystem-heavy piece of ``al optimize``: real LLM
+Each handler owns one ecosystem-heavy piece of ``hlock optimize``: real LLM
 invocation, user-trace loading, synthetic-data generation, model grading,
 prompt search, and LoRA fine-tuning. ``backend=local`` runs the body in-process
 here; ``backend=devbox|cluster`` best-effort lifts the body to a real Flyte task
@@ -27,7 +27,7 @@ import os
 import sys
 from pathlib import Path
 
-# Keep in sync with crates/agent-lock-core/src/worker.rs::CONTRACT_VERSION.
+# Keep in sync with crates/harness-lock-core/src/worker.rs::CONTRACT_VERSION.
 CONTRACT_VERSION = 1
 
 
@@ -36,7 +36,7 @@ CONTRACT_VERSION = 1
 # --------------------------------------------------------------------------- #
 
 def _model_quality(model: str) -> float:
-    # Mirrors crates/agent-lock-core/src/providers.rs::ReferenceProvider::quality
+    # Mirrors crates/harness-lock-core/src/providers.rs::ReferenceProvider::quality
     # so the deterministic fallback keeps discriminating model tiers identically.
     table = {"qwen-1.5b": 0.55, "qwen-7b": 0.75, "qwen-32b": 0.88}
     if model in table:
@@ -119,7 +119,7 @@ def _call_llm(model: str, prompt: str, seed: int, salt: int = 0) -> dict:
 # --------------------------------------------------------------------------- #
 
 def llm_run_trial(req: dict) -> dict:
-    """Run one (stack, task, seed) trial — the work ``al optimize`` fans out."""
+    """Run one (stack, task, seed) trial — the work ``hlock optimize`` fans out."""
     stack = req.get("stack") or {}
     model_spec = stack.get("llm", {}).get("planner", "reference:qwen-7b")
     provider, _, model = model_spec.partition(":")
@@ -381,7 +381,7 @@ def _write(path, obj):
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(prog="al-worker")
+    ap = argparse.ArgumentParser(prog="hlock-worker")
     ap.add_argument("request", type=Path, help="path to the request JSON")
     ap.add_argument("response", type=Path, help="path to write the response JSON")
     args = ap.parse_args(argv)

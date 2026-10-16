@@ -219,8 +219,8 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# agent-lock local run artifacts (store, runs, caches) — commit hpm.lock, not these
-.agentlock/
+# harness-lock local run artifacts (store, runs, caches) — commit harness.lock, not these
+.harnesslock/
 
 # Rust build artifacts
 /target

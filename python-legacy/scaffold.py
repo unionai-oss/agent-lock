@@ -1,4 +1,4 @@
-"""Scaffolding: render a starter ``hpm.toml`` (``al init``)."""
+"""Scaffolding: render a starter ``harnesslock.toml`` (``hlock init``)."""
 
 from __future__ import annotations
 
@@ -27,4 +27,4 @@ def render_default_manifest(name: str = "agent", pack: str = "./tasks") -> str:
         "backend": {"target": "local"},
     }
     body = tomli_w.dumps(data)
-    return "# agent-lock manifest\n# Declare what the tuner may try and what 'best' means.\n" + body
+    return "# harness-lock manifest\n# Declare what the tuner may try and what 'best' means.\n" + body

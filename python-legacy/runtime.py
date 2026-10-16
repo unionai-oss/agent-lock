@@ -1,6 +1,6 @@
 """Runtime: load a lock and run the locked agent.
 
-``al load`` + ``agent.run(...)`` execute the locked stack with the runtime guard:
+``hlock load`` + ``agent.run(...)`` execute the locked stack with the runtime guard:
 model calls are checked against the locked provider/model/params, tool calls against
 the allowlist, and every run emits a trace so production traces can feed the next
 tuning round.
@@ -12,10 +12,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from al.adapters import ADAPTERS
-from hpm.lockfile import Lockfile
-from al.search import Stack
-from al.traces import Trace, TraceRecorder
+from hlock.adapters import ADAPTERS
+from harness.lockfile import Lockfile
+from hlock.search import Stack
+from hlock.traces import Trace, TraceRecorder
 
 
 @dataclass
@@ -58,7 +58,7 @@ class LockedAgent:
     def __init__(self, lock: Lockfile, guard: RuntimeGuard | None = None, workdir: Path | None = None) -> None:
         self.lock = lock
         self.guard = guard or RuntimeGuard(lock, mode="strict")
-        self.workdir = workdir or Path(".agentlock/run")
+        self.workdir = workdir or Path(".harnesslock/run")
 
     @classmethod
     def load(cls, path: str | Path, mode: str = "strict") -> LockedAgent:
@@ -78,7 +78,7 @@ class LockedAgent:
         )
 
     async def run(self, prompt: str) -> RunOutcome:
-        from al.tasks import Task
+        from hlock.tasks import Task
 
         adapter = ADAPTERS.get(self.lock.harness.name or "reference")
         task = Task(id="cli-run", prompt="", prompt_text=prompt, expected={"artifacts": []})

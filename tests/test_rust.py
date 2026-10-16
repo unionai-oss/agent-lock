@@ -1,11 +1,11 @@
-"""Tests for the `al` Python bindings (Rust-backed)."""
+"""Tests for the `hlock` Python bindings (Rust-backed)."""
 
 import json
 from pathlib import Path
 
 import pytest
 
-import agent_lock as al
+import harness_lock as hlock
 
 REPO = Path(__file__).resolve().parent.parent
 TASKS = REPO / "tasks"
@@ -35,39 +35,39 @@ def workspace(tmp_path):
 
 
 def test_module_surface():
-    assert al.LOCK_VERSION == 1
-    assert isinstance(al.__version__, str)
+    assert hlock.LOCK_VERSION == 1
+    assert isinstance(hlock.__version__, str)
     for name in ("Manifest", "Objective", "Budget", "SearchSpace", "Lockfile", "LockedAgent"):
-        assert hasattr(al, name)
-    assert callable(al.lock)
-    assert callable(al.load)
+        assert hasattr(hlock, name)
+    assert callable(hlock.resolve)
+    assert callable(hlock.load)
 
 
 def test_search_space_tune(workspace, monkeypatch):
     ws, base = workspace
     monkeypatch.chdir(base)
-    space = al.SearchSpace(
+    space = hlock.SearchSpace(
         llm={"planner": ["reference:qwen-7b", "reference:qwen-32b"]},
         decision=["none", "rules:default"],
         harness=["reference"],
         tasks=json.dumps({"packs": [str(ws)], "seeds": 2}),
     )
-    lf = al.lock(space, backend="local", workdir=str(base / ".agentlock"))
+    lf = hlock.resolve(space, backend="local", workdir=str(base / ".harnesslock"))
     assert lf.harness == "reference"
     ev = json.loads(lf.evidence)
     assert ev["trials"] >= 1
-    # hpm.lock written at cwd
-    assert (base / "hpm.lock").exists()
+    # harness.lock written at cwd
+    assert (base / "harness.lock").exists()
 
     # load + run
-    agent = al.load(str(base / "hpm.lock"))
+    agent = hlock.load(str(base / "harness.lock"))
     assert agent.summary() != ""
     outcome = json.loads(agent.run("do the demo task"))
     assert "success" in outcome
 
 
 def test_manifest_load_write(tmp_path):
-    m = al.Manifest.from_str(
+    m = hlock.Manifest.from_str(
         "[project]\nname='m'\n[candidates.llm.planner]\nany_of=['reference:qwen-7b']\n"
         "[candidates]\nharness=['reference']\n[budget]\nstrategy='grid'\n"
     )
@@ -77,7 +77,7 @@ def test_manifest_load_write(tmp_path):
 
 
 def test_upgrade_and_optimize(tmp_path, monkeypatch):
-    """al upgrade (plan/apply/rollback) and al optimize via the bindings."""
+    """hlock upgrade (plan/apply/rollback) and hlock optimize via the bindings."""
     import json as _json
 
     # a local task pack
@@ -97,25 +97,25 @@ def test_upgrade_and_optimize(tmp_path, monkeypatch):
         "[objective]\nprimary='success-rate'\nselect='max-quality'\n"
         "[objective.constraints]\nsuccess-rate='>=0.5'\n[budget]\nstrategy='grid'\n"
     )
-    (tmp_path / "hpm.toml").write_text(manifest)
+    (tmp_path / "harnesslock.toml").write_text(manifest)
 
-    al.lock(manifest="hpm.toml", backend="local", workdir=str(tmp_path / ".agentlock"))
-    assert (tmp_path / "hpm.lock").exists()
+    hlock.resolve(manifest="harnesslock.toml", backend="local", workdir=str(tmp_path / ".harnesslock"))
+    assert (tmp_path / "harness.lock").exists()
 
-    plan = _json.loads(al.upgrade(manifest="hpm.toml", all=True))
+    plan = _json.loads(hlock.upgrade(manifest="harnesslock.toml", all=True))
     assert plan["plan"]["upgradeable"] and plan["plan"]["upgradeable"][0]["to"] == "qwen-32b"
 
-    applied = _json.loads(al.upgrade(manifest="hpm.toml", all=True, apply=True))
+    applied = _json.loads(hlock.upgrade(manifest="harnesslock.toml", all=True, apply=True))
     assert applied["applied"] is True
-    assert (tmp_path / "hpm.lock.prev").exists()
+    assert (tmp_path / "harness.lock.prev").exists()
 
-    rolled = _json.loads(al.upgrade(manifest="hpm.toml", rollback=True))
+    rolled = _json.loads(hlock.upgrade(manifest="harnesslock.toml", rollback=True))
     assert rolled["rolled_back"] is True
 
-    opt = _json.loads(al.optimize(manifest="hpm.toml", depth="hpo", out=str(tmp_path / "harness.opt.lock")))
+    opt = _json.loads(hlock.optimize(manifest="harnesslock.toml", depth="hpo", out=str(tmp_path / "harness.opt.lock")))
     assert (tmp_path / "harness.opt.lock").exists()
     assert opt["report"]["depth"] == "hpo"
     # reload the opt lock and confirm it is marked optimized
-    opt_lock = al.Lockfile.load(str(tmp_path / "harness.opt.lock"))
+    opt_lock = hlock.Lockfile.load(str(tmp_path / "harness.opt.lock"))
     assert "optimized" in opt_lock.to_json() or opt_lock.harness
     assert opt["summary"] != ""
