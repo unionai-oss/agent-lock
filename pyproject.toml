@@ -1,0 +1,69 @@
+[project]
+name = "harness-package-manager"
+version = "0.1.0"
+description = "Lock your agent into place — tune your agent stack and pin it."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Niels Bantilan", email = "niels.bantilan@gmail.com" }]
+keywords = ["agents", "evaluation", "llm", "lockfile", "tuning"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    "pydantic>=2.0",
+    "PyYAML>=6.0",
+    "tomli-w>=1.0",
+    "click>=8.0",
+    "httpx>=0.24",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "ruff>=0.4",
+]
+flyte = [
+    "flyte>=2.0",
+]
+all = [
+    "flyte>=2.0",
+    "pytest>=7.0",
+]
+
+[project.scripts]
+hpm = "hpm.cli.main:main"
+harness-package-manager = "hpm.cli.main:main"
+
+[project.entry-points."hpm.adapters"]
+reference = "hpm.adapters.reference:ReferenceAdapter"
+
+[project.entry-points."hpm.component_kinds"]
+tool = "hpm.components.kinds:ToolKind"
+mcp = "hpm.components.kinds:MCPKind"
+skill = "hpm.components.kinds:SkillKind"
+instructions = "hpm.components.kinds:InstructionsKind"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["hpm"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+ignore = [
+    "BLE001",  # blind except is used deliberately around third-party graders/plugins
+    "RUF012",   # mutable class attrs in tests are intentional
+    "S112",     # try/except pass in entry-point loading is intentional
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
