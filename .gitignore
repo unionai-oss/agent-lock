@@ -221,3 +221,14 @@ __marimo__/
 
 # hpm local run artifacts (store, runs, caches) — commit agent.lock, not these
 .agentlock/
+
+# Rust build artifacts
+/target
+*.so
+*.dylib
+*.dll
+
+# Python build/dist
+*.whl
+/dist/
+/build/

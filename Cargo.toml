@@ -1,0 +1,28 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/hpm-core",
+    "crates/hpm",
+]
+default-members = ["crates/hpm-core", "crates/hpm"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+authors = ["Niels Bantilan <niels.bantilan@gmail.com>"]
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+sha2 = "0.10"
+anyhow = "1"
+thiserror = "2"
+pyo3 = { version = "0.24", features = ["extension-module"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[profile.release]
+lto = "thin"

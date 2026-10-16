@@ -7,6 +7,15 @@
 
 Status: draft · Owner: Niels Bantilan · Last updated: 2026-10-16
 
+> **Implementation note (rust pivot).** The core is implemented in **Rust**
+> (`crates/hpm-core`, the `hpm` crate, `cargo`-installable), with **Python
+> bindings** (PyO3) exposing the same Layer 0/1 API (`import hpm`, `hpm …`) so the
+> user surface stays as specified here. The tuning backend is built on
+> [flyte-sdk-rs](https://github.com/flyteorg/flyte-sdk-rs) behind the `flyte`
+> cargo feature (provisional). A reference pure-Python implementation is preserved
+> in `python-legacy/`. Where the spec shows `import agent_lock` / `al`,
+> read `hpm`.
+
 ---
 
 ## 1. Summary

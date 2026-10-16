@@ -16,15 +16,50 @@ your domain.
 | CI `--locked` check        | `hpm check` — fail if the running stack drifts from the lock |
 
 See `SPEC.md` for the full design (manifest, lockfile schema, component model,
-task packs, search strategies, Flyte backend, open-weights models).
+task packs, search strategies, the Flyte backend, open-weights models).
+The (superseded) reference pure-Python implementation is preserved under
+`python-legacy/`.
+
+## Architecture
+
+```
+            Python API/CLI  (import hpm, `hpm` command)     <- PyO3 bindings
+                         │
+                         ▼
+                  hpm-core (Rust)          manifest · lockfile · store ·
+                                           task packs · search · tuner
+                         │
+                         └── flyte backend (flyte-sdk-rs, optional feature)
+```
+
+- `crates/hpm-core` — the core library (pure Rust, no Python).
+- `crates/hpm` — PyO3 extension (`hpm._hpm`) exposing the same user-facing
+  Python API as the reference implementation via the `hpm` package.
+- `hpm/` — the mixed Python package: re-exports the compiled `hpm._hpm` and the
+  `hpm` CLI.
+- `crates/hpm-core/src/flyte.rs` — provisional backend integration using
+  [flyte-sdk-rs](https://github.com/flyteorg/flyte-sdk-rs) behind the `flyte`
+  cargo feature.
 
 ## Install
 
+From the Rust side you depend on the crate; from Python you get native bindings.
+
 ```bash
-pip install -e ".[dev]"      # from this repo
+# Python bindings — pip / uv / uvx
+pip install harness-package-manager          # or: uv add / uvx
+uv pip install -e .                            # editable dev install (this repo)
+
+# Rust crate  (publish later; locally)
+cargo add hpm-core --path crates/hpm-core
 ```
 
-This installs the `hpm` command and the `hpm` Python import.
+A local editable build needs a Rust toolchain + a Python ≤3.13 interpreter:
+
+```bash
+python3.13 -m venv .venv && .venv/bin/pip install click pytest
+maturin develop -m crates/hpm/Cargo.toml      # builds + installs the hpm wheel
+```
 
 ## Quickstart (local, no accounts)
 
@@ -35,43 +70,50 @@ hpm show                              # pretty-print the locked stack + evidence
 hpm check                             # static verification (CI-friendly exit code)
 hpm tree                              # component dependency graph
 hpm run "solve this task"             # run the locked agent with the runtime guard
-hpm diff                              # structural + evidence diff vs. committed lock
 hpm backend status                    # report the active backend / Flyte config
 ```
 
 The built-in `reference` provider and harness are deterministic and offline, so the
-whole loop runs with zero setup and no API keys, producing a real-looking
-leaderboard and lock.
-
-## Backends
-
-- `local` — in-process async runner (default).
-- `devbox` / `cluster` — a Flyte 2 pipeline (`hpm.flyte`); reads `~/.flyte/config.yaml`
-  for cluster targets and calls `flyte.run`. `flyte` is an optional extra
-  (`pip install harness-package-manager[flyte]`).
+whole loop runs with zero setup and no API keys.
 
 ## Python API (Layer 1)
 
 ```python
 import hpm
+from hpm import SearchSpace, Objective, Budget
 
-lock = hpm.lock("agentlock.toml", backend="local")   # tune + write agent.lock
-print(lock.evidence.summary() if hasattr(lock.evidence, "summary") else lock)
+space = SearchSpace(
+    llm={"planner": ["reference:qwen-7b", "reference:qwen-32b"]},
+    decision=["none", "rules:default"],
+    harness=["reference"],
+    tasks='{"packs": ["./tasks"], "seeds": 2}',
+)
+lock = hpm.lock(space, backend="local", workdir=".agentlock")
+print(lock.summary())
 
-agent = hpm.load("agent.lock", mode="strict")        # runnable, guarded agent
-outcome = await agent.run("clean ./data/orders.csv")
+agent = hpm.load("agent.lock")
+print(agent.run("clean ./data/orders.csv"))
 ```
 
-## Layout
+## Backends
 
-- `hpm/` — the package: manifest, lockfile, store, components, providers, adapters,
-  tasks, search, traces, runtime, backends, flyte, CLI.
-- `tasks/` — a small example task pack (`pack.toml` + tasks + graders).
-- `tests/` — unit + end-to-end tests.
+- `local` — in-process Rust async loop (default).
+- `devbox` / `cluster` — a [flyte-sdk-rs](https://github.com/flyteorg/flyte-sdk-rs)
+  backend (`cargo build --features flyte`) with a `flyteplugins-rs` Python
+  launcher registering the trial task against a Flyte / Union cluster
+  (`~/.flyte/config.yaml`). Provisional.
+
+## Development
+
+```bash
+cargo test -p hpm-core            # Rust core + integration tests
+.venv/bin/python -m pytest tests  # Python bindings tests
+ruff check hpm/tests              # lint the Python layer
+```
 
 ## Status
 
-Early v0.1: manifest + lockfile schema v1, content-addressed store, task packs with
-graders, reference provider/harness, grid search + Pareto selection, the `init /
-lock / show / check / tree / run / diff / backend` CLI, and a provisional Flyte
-backend wired to `~/.flyte/config.yaml`.
+Early v0.1 (Rust core): manifest + lockfile schema v1, content-addressed store,
+task packs with graders, reference provider/harness, grid search + Pareto
+selection, a working `init / lock / show / check / tree / run / backend` CLI via
+PyO3 bindings, and installable via pip/uv (crate not yet published).
