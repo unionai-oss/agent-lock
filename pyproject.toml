@@ -4,7 +4,9 @@ build-backend = "maturin"
 
 [project]
 name = "harness-lock"
-version = "0.1.0"
+# Read by maturin from the Cargo workspace ([workspace.package].version), the single
+# source of truth. Bump it with `python scripts/set_version.py X.Y.Z`.
+dynamic = ["version"]
 description = "Lock your agent into place — tune your agent stack and pin it (Rust core + Python bindings)."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -35,7 +37,7 @@ hlock = "harness_lock.cli:main"
 harness-lock = "harness_lock.cli:main"
 
 [tool.maturin]
-manifest-path = "crates/harness-lock/Cargo.toml"
+manifest-path = "crates/harness-lock-py/Cargo.toml"
 module-name = "harness_lock._harness_lock"
 python-source = "."
 

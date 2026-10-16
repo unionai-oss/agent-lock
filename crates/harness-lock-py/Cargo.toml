@@ -1,0 +1,28 @@
+[package]
+name = "harness-lock-py"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Python bindings for harness-lock."
+# Built as a Python extension module (pyo3 `extension-module`), so it isn't linkable
+# from Rust. It ships inside the `harness-lock` PyPI wheel. The crates.io names
+# `harness-lock` and `hlock` are the Rust library facades in ../harness-lock and ../hlock.
+publish = false
+
+[lib]
+name = "harness_lock"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+harness-lock-core = { path = "../harness-lock-core", version = "=0.1.0" }
+pyo3 = { workspace = true }
+serde_json = { workspace = true }
+
+[features]
+default = []
+
+# Build the release extension module as the importable `harness_lock` package.
+[package.metadata.maturin]
+python-source = "."

@@ -1,0 +1,28 @@
+[package]
+name = "hlock"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Short name for harness-lock: lock your agent into place."
+readme = "../../README.md"
+homepage = "https://github.com/unionai-oss/harness-lock"
+documentation = "https://docs.rs/hlock"
+keywords = ["agents", "llm", "lockfile", "evaluation", "flyte"]
+categories = ["development-tools", "command-line-utilities"]
+
+[lib]
+name = "hlock"
+
+[dependencies]
+# Exact pin: hlock X.Y.Z is always harness-lock-core X.Y.Z.
+harness-lock-core = { path = "../harness-lock-core", version = "=0.1.0" }
+
+[features]
+default = []
+# Durable, traced trial execution on a Flyte / Union backend.
+flyte = ["harness-lock-core/flyte"]
+
+[lints]
+workspace = true

@@ -1,89 +1,230 @@
 name: publish-python
 
-# Publishes the `harness-lock` Python bindings to PyPI.
+# Publishes two PyPI names under the unionai-oss PyPI account, via trusted publishing:
+#   harness-lock  the package (Rust core + PyO3 bindings, built with maturin)
+#   hlock         the short name: a pure-Python alias (packaging/hlock) that pins
+#                 harness-lock==<same version> and re-exports it as `import hlock`
+# harness-lock publishes first, so `pip install hlock` never points at a missing release.
 #
-# Pip / uv / uvx install from PyPI: `pip install harness-lock`.
+# Release: `python scripts/set_version.py X.Y.Z`, merge to main, then push tag vX.Y.Z.
+# The version job refuses to continue unless the tag matches the Cargo workspace version.
 #
-# Setup (once, in the repo Settings > Secrets and variables > Actions):
-#   - Trusted publishing (recommended): create a PyPI "publisher" mapping to this
-#     GitHub repo + environment `pypi`; no token needed.
-#   - Or set `PYPI_TOKEN` (a PyPI-scoped token) and the workflow falls back to it.
-#   - For test PyPI publishes, set `TEST_PYPI_TOKEN` and run with `--pypi test`.
+# Manual runs default to a dry run: they build every wheel and the sdist, verify them,
+# and stop before publishing. Set `dry_run: false` to publish from a manual run.
+#
+# One-time setup (see RELEASING.md):
+#   - a GitHub environment named `pypi`
+#   - one PyPI trusted publisher per package name (`harness-lock`, then `hlock`), added
+#     while logged in as the unionai-oss PyPI account (as *pending* publishers before
+#     the first release, since the projects don't exist yet): owner `unionai-oss`,
+#     repository `harness-lock`, workflow `publish-python.yml`, environment `pypi`.
+# No API token is stored anywhere; the `pypi` job's `id-token: write` authenticates.
 
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
     inputs:
-      pypi:
-        description: "Which index to publish to"
-        type: choice
-        default: main
-        options: [main, test]
-
-env:
-  PYPI_TARGET: ${{ github.event.inputs.pypi || 'main' }}
+      dry_run:
+        description: "Build and verify only — do not publish"
+        type: boolean
+        default: true
 
 permissions:
   contents: read
-  # For trusted publishing (`pypa/gh-action-pypi-publish`). Only used when
-  # publishing with OIDC to the `pypi` environment.
-  id-token: write
+
+concurrency:
+  group: publish-python-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  build:
-    name: Build wheel / sdist (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-14, macos-14-xlarge, windows-latest]
+  version:
+    name: Check version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
-      - name: Build wheels (abi3, CPython ≥ 3.9)
-        uses: PyO3/maturin-action@v1
+          python-version: "3.12"
+      # A tag that disagrees with the version would publish a release nobody can
+      # trace back to a commit, so fail loudly instead.
+      - id: version
+        name: Versions agree (and match the tag)
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION=$(python scripts/set_version.py --check "$GITHUB_REF_NAME")
+          else
+            VERSION=$(python scripts/set_version.py --check)
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "building $VERSION"
+
+  wheels:
+    name: Wheel (${{ matrix.platform }})
+    needs: version
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: linux-x86_64, os: ubuntu-latest, target: x86_64 }
+          - { platform: linux-aarch64, os: ubuntu-latest, target: aarch64 }
+          - { platform: macos-arm64, os: macos-14, target: aarch64 }
+          - { platform: macos-x86_64, os: macos-14, target: x86_64 }
+          - { platform: windows-x64, os: windows-latest, target: x64 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          manifest-path: crates/harness-lock/Cargo.toml
+          python-version: "3.12"
+      # One abi3 wheel per platform covers CPython >= 3.9.
+      - uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
           args: --release --out dist
-          # harness-lock-core is a workspace member; build only the bindings crate.
           manylinux: auto
-      - name: Build source dist (Linux only)
-        if: runner.os == 'Linux'
-        run: maturin sdist --manifest-path crates/harness-lock/Cargo.toml -o dist
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.os }}
+          name: dist-wheel-${{ matrix.platform }}
           path: dist
 
-  # Upload wheels produced on Linux (manylinux covers x86_64 + aarch64).
-  # Edit this step if you add more platforms and want them all published.
-  publish:
-    name: Publish to PyPI
-    needs: build
+  sdist:
+    name: Source distribution
+    needs: version
     runs-on: ubuntu-latest
-    environment: pypi
-    if: startsWith(github.ref, 'refs/tags/v')
     steps:
-      - name: Download all wheels
-        uses: actions/download-artifact@v4
+      - uses: actions/checkout@v4
+      - uses: PyO3/maturin-action@v1
         with:
+          command: sdist
+          args: --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-sdist
+          path: dist
+
+  hlock:
+    name: hlock alias package
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build sdist + wheel
+        run: |
+          python -m pip install --upgrade build
+          python -m build packaging/hlock --outdir dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hlock-dist
+          path: dist
+
+  verify:
+    name: Verify distributions
+    needs: [version, wheels, sdist, hlock]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
           path: dist
           merge-multiple: true
-      - name: Publish (main PyPI)
-        if: env.PYPI_TARGET == 'main'
-        uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: actions/download-artifact@v4
+        with:
+          name: hlock-dist
+          path: hlock-dist
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: twine check
+        run: |
+          python -m pip install --upgrade twine packaging
+          ls -l dist hlock-dist
+          twine check dist/* hlock-dist/*
+      - name: Every expected artifact is present
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          # PEP 440 normalizes pre-releases in filenames (0.2.0-rc.1 -> 0.2.0rc1).
+          PY_VERSION=$(python -c "import os; from packaging.version import Version; print(Version(os.environ['VERSION']))")
+          for pattern in \
+            "harness_lock-${PY_VERSION}.tar.gz" \
+            "harness_lock-${PY_VERSION}-*manylinux*x86_64*.whl" \
+            "harness_lock-${PY_VERSION}-*manylinux*aarch64*.whl" \
+            "harness_lock-${PY_VERSION}-*macosx*arm64*.whl" \
+            "harness_lock-${PY_VERSION}-*macosx*x86_64*.whl" \
+            "harness_lock-${PY_VERSION}-*win_amd64*.whl" \
+            "../hlock-dist/hlock-${PY_VERSION}.tar.gz" \
+            "../hlock-dist/hlock-${PY_VERSION}-py3-none-any.whl"; do
+            compgen -G "dist/$pattern" > /dev/null || { echo "::error::missing dist/$pattern"; exit 1; }
+          done
+      - name: Install both names and smoke-test them
+        run: |
+          set -euo pipefail
+          python -m venv /tmp/venv
+          # `hlock` pins harness-lock==<same version>; resolve it from the local wheels.
+          /tmp/venv/bin/pip install --find-links dist --find-links hlock-dist hlock
+          /tmp/venv/bin/hlock --version
+          /tmp/venv/bin/python -c "import harness_lock, hlock; assert hlock.__version__ == harness_lock.__version__; print(hlock.__version__)"
+
+  pypi:
+    name: Publish harness-lock to PyPI
+    needs: [version, verify]
+    if: github.event_name == 'push' || inputs.dry_run == false
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write # PyPI trusted publishing — no API token needed
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+      - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist
-          # Trusted publishing via OIDC (requires the `pypi` environment be
-          # registered as a PyPI publisher). No token is needed or passed.
-      - name: Publish (test PyPI)
-        if: env.PYPI_TARGET == 'test'
-        uses: pypa/gh-action-pypi-publish@release/v1
+          # Re-running a release tag should be a no-op, not a hard failure.
+          skip-existing: true
+
+  pypi-hlock:
+    name: Publish hlock to PyPI
+    needs: [pypi]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write # PyPI trusted publishing — no API token needed
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: hlock-dist
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist
-          repository-url: https://test.pypi.org/legacy/
-          password: ${{ secrets.TEST_PYPI_TOKEN }}
+          skip-existing: true
+
+  release:
+    name: GitHub release
+    needs: [pypi, pypi-hlock]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: "*dist*"
+          path: dist
+          merge-multiple: true
+      - name: Attach the published artifacts to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --generate-notes --title "$GITHUB_REF_NAME" dist/* \
+            || gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" dist/* --clobber

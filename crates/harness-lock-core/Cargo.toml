@@ -6,6 +6,10 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 description = "Core library for harness-lock: manifest, lockfile, store, tuning."
+readme = "../../README.md"
+homepage = "https://github.com/unionai-oss/harness-lock"
+keywords = ["agents", "llm", "lockfile", "evaluation", "flyte"]
+categories = ["development-tools", "command-line-utilities"]
 
 # Code-facing crate name stays `harness_lock_core` while the published (crates.io)
 # name is `harness-lock-core`.
