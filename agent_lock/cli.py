@@ -127,17 +127,18 @@ def upgrade(to: str | None, all: bool, apply: bool, rollback: bool, force: bool,
 @click.option("--strict", is_flag=True, help="fail unless the opt lock beats the base")
 @click.option("--apply", is_flag=True, help="also adopt the result into hpm.lock")
 @click.option("--max-trials", default=None, type=int)
+@click.option("--backend", default=None, type=click.Choice(["local", "devbox", "cluster"]), help="override the manifest's [backend] target")
 @click.option("--workdir", default=None)
-def optimize(depth: str, data: str, harness: str | None, out: str, strict: bool, apply: bool, max_trials: int | None, workdir: str | None) -> None:
+def optimize(depth: str, data: str, harness: str | None, out: str, strict: bool, apply: bool, max_trials: int | None, backend: str | None, workdir: str | None) -> None:
     """Optimize the harness -> harness.opt.lock (§5.9, §8.5)."""
     import json as _json
 
     result = _json.loads(
-        al_optimize(depth=depth, data=data, harness=harness, out=out, strict=strict, apply=apply, max_trials=max_trials, workdir=workdir)
+        al_optimize(depth=depth, data=data, harness=harness, out=out, strict=strict, apply=apply, max_trials=max_trials, backend=backend, workdir=workdir)
     )
     r = result.get("report", {})
     click.echo(f"wrote {result.get('path')}")
-    click.echo(f"  depth={r.get('depth')} grid={r.get('grid')} best={r.get('best')}")
+    click.echo(f"  depth={r.get('depth')} backend={r.get('backend')} grid={r.get('grid')} best={r.get('best')}")
     click.echo(f"  baseline success={r.get('baseline_success_rate'):.2f} -> "
                f"optimized={r.get('best', {}).get('success_rate'):.2f} (gain {r.get('gain_success_rate'):+.2f})")
     if result.get("summary"):

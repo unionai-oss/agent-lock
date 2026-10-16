@@ -20,16 +20,19 @@ pub mod search;
 pub mod store;
 pub mod tasks;
 pub mod tuner;
+pub mod worker;
 
 #[cfg(feature = "flyte")]
 pub mod flyte;
 
+pub use adapters::HarnessAdapter;
 pub use error::{Error, Result};
 pub use hash::{content_hash, sha256_hex, sha256_text};
 pub use lockfile::Lockfile;
 pub use manifest::Manifest;
 pub use store::Store;
 pub use tuner::Tuner;
+pub use worker::Backend;
 
 /// Schema version of the `hpm.lock` lockfile.
 pub const LOCK_VERSION: i64 = 1;

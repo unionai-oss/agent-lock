@@ -385,7 +385,8 @@ impl PyLockedAgent {
 fn lock(py: Python<'_>, manifest: Option<PyObject>, backend: Option<String>, workdir: Option<String>) -> PyResult<PyLockfile> {
     let core_manifest = resolve_manifest(py, manifest, backend.as_deref())?;
     let wd = workdir.unwrap_or_else(|| ".agentlock".to_string());
-    let mut tuner = core::Tuner::new(core_manifest, &wd);
+    let backend = core::Backend::parse(core_manifest.backend_target().as_str());
+    let mut tuner = core::Tuner::with_backend(core_manifest, &wd, backend);
     let lf = tuner.tune().map_err(py_err)?;
     Ok(PyLockfile { inner: lf })
 }
@@ -461,7 +462,7 @@ fn upgrade(
 }
 
 #[pyfunction]
-#[pyo3(signature = (manifest=None, depth="auto".to_string(), data="user".to_string(), harness=None, out=None, strict=false, apply=false, max_trials=None, workdir=None))]
+#[pyo3(signature = (manifest=None, depth="auto".to_string(), data="user".to_string(), harness=None, out=None, strict=false, apply=false, max_trials=None, backend=None, workdir=None))]
 fn optimize(
     py: Python<'_>,
     manifest: Option<PyObject>,
@@ -472,9 +473,10 @@ fn optimize(
     strict: bool,
     apply: bool,
     max_trials: Option<usize>,
+    backend: Option<String>,
     workdir: Option<String>,
 ) -> PyResult<String> {
-    let m = resolve_manifest(py, manifest, None)?;
+    let m = resolve_manifest(py, manifest, backend.as_deref())?;
     let spec = core::ops::OptimizeSpec {
         depth,
         data,
@@ -483,6 +485,7 @@ fn optimize(
         strict,
         apply,
         max_trials,
+        backend,
         workdir: PathBuf::from(workdir.unwrap_or_else(|| ".agentlock".to_string())),
     };
     let o = core::ops::optimize(m, &spec).map_err(py_err)?;

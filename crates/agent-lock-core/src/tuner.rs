@@ -12,6 +12,7 @@ use crate::manifest::{HarnessCandidate, Manifest};
 use crate::search::{select_winner, Stack, StackScore, TrialResult};
 use crate::store::Store;
 use crate::tasks::TaskPack;
+use crate::worker::{Backend, PythonAdapter};
 
 /// Aggregated metrics container produced by the tuner.
 
@@ -19,20 +20,35 @@ pub struct Tuner {
     pub manifest: Manifest,
     pub workdir: PathBuf,
     pub store: Store,
+    pub backend: Backend,
     pack_by_task: BTreeMap<String, crate::tasks::TaskPack>,
-    adapter: ReferenceAdapter,
+    adapter: Box<dyn HarnessAdapter>,
 }
 
 impl Tuner {
+    /// Create a tuner that runs on the local, in-process reference harness.
     pub fn new(manifest: Manifest, workdir: impl Into<PathBuf>) -> Self {
+        Self::with_backend(manifest, workdir, Backend::Local)
+    }
+
+    /// Create a tuner for a specific backend. `devbox`/`cluster` delegate trials
+    /// to the Python worker (which may lift them to real Flyte tasks); `local`
+    /// keeps the deterministic offline reference harness.
+    pub fn with_backend(manifest: Manifest, workdir: impl Into<PathBuf>, backend: Backend) -> Self {
         let workdir: PathBuf = workdir.into();
         let store = Store::new(workdir.join("store"));
+        let adapter: Box<dyn HarnessAdapter> = if backend.needs_worker() {
+            Box::new(PythonAdapter::new())
+        } else {
+            Box::new(ReferenceAdapter::default())
+        };
         Tuner {
             manifest,
             workdir,
             store,
+            backend,
             pack_by_task: BTreeMap::new(),
-            adapter: ReferenceAdapter::default(),
+            adapter,
         }
     }
 
@@ -44,7 +60,7 @@ impl Tuner {
             match TaskPack::load(&ref_, Some(&base)) {
                 Ok(pack) => {
                     let (s, _h) = pack.split(self.manifest.search_frac(), self.manifest.budget.random_seed);
-                    for t in pach_tasks(&pack) {
+                    for t in pack.tasks.clone() {
                         self.pack_by_task.insert(t.id.clone(), pack.clone());
                     }
                     search.extend(s);
@@ -281,10 +297,6 @@ impl Tuner {
 
 fn roundf(v: f64) -> f64 {
     (v * 1e4).round() / 1e4
-}
-
-fn pach_tasks(pack: &TaskPack) -> Vec<crate::tasks::Task> {
-    pack.tasks.clone()
 }
 
 fn llm_combos(cands: &BTreeMap<String, crate::manifest::LLMCandidate>) -> Vec<BTreeMap<String, String>> {

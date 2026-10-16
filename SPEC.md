@@ -11,10 +11,15 @@ Status: draft · Owner: Niels Bantilan · Last updated: 2026-10-16
 > (`crates/agent-lock-core` and the `crates/agent-lock` bindings crate, published
 > to crates.io), with **Python bindings** (PyO3) exposing the same Layer 0/1 API
 > (`import agent_lock as al`, CLI `al`) so the user surface stays as specified
-> here. The tuning backend is built on
-> [flyte-sdk-rs](https://github.com/flyteorg/flyte-sdk-rs) behind the `flyte`
-> cargo feature (provisional). A reference pure-Python implementation is preserved
-> in `python-legacy/`.
+> here. The Rust core stays the orchestrator/aggregator; ecosystem- and
+> GPU-heavy work (real LLM calls, pandas/polars trace loading, synthetic data,
+> grading, prompt search, LoRA) runs in the Python worker
+> (`agent_lock/tasks/worker.py`), which the core drives out-of-process over a
+> versioned JSON contract and which in turn raises each body to a real Flyte
+> task on `devbox`/`cluster` (Python `flyte` / `flyteplugins-rs`;
+> `~/.flyte/config.yaml`). A [flyte-sdk-rs](https://github.com/flyteorg/flyte-sdk-rs)
+> backend also exists behind the `flyte` cargo feature (provisional). A reference
+> pure-Python implementation is preserved in `python-legacy/`.
 
 ---
 
