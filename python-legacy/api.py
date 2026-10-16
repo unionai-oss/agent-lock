@@ -29,7 +29,7 @@ class LLMSpace:
 
 @dataclass
 class SearchSpace:
-    """Programmatic stand-in for an ``agentlock.toml`` manifest."""
+    """Programmatic stand-in for an ``hpm.toml`` manifest."""
 
     llm: dict[str, list[str]] = field(default_factory=dict)
     decision: list[str] = field(default_factory=list)
@@ -69,8 +69,8 @@ def lock(
 ) -> Lockfile:
     """Tune and return (and write) the locked agent stack.
 
-    Accepts a Manifest, a path to an ``agentlock.toml``, a programmatic
-    ``SearchSpace``, or ``None`` (loads ``./agentlock.toml``).
+    Accepts a Manifest, a path to an ``hpm.toml``, a programmatic
+    ``SearchSpace``, or ``None`` (loads ``./hpm.toml``).
     """
     if isinstance(manifest, SearchSpace):
         m = manifest.to_manifest()
@@ -79,7 +79,7 @@ def lock(
     elif isinstance(manifest, Manifest):
         m = manifest
     else:
-        m = Manifest.load("agentlock.toml")
+        m = Manifest.load("hpm.toml")
 
     if objective:
         m.objective = objective
@@ -94,7 +94,7 @@ def lock(
     return tuner.tune(backend=bk)
 
 
-def load(path: str | Path = "agent.lock", mode: str = "strict") -> LockedAgent:
+def load(path: str | Path = "hpm.lock", mode: str = "strict") -> LockedAgent:
     """Load a lockfile into a runnable, guarded agent."""
     return LockedAgent.load(path, mode=mode)
 

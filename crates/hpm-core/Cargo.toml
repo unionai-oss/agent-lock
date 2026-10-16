@@ -1,0 +1,24 @@
+[package]
+name = "hpm-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Core library for harness-package-manager: manifest, lockfile, store, tuning."
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+sha2 = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+# The flyte-sdk-rs backend (optional — links libpython via flyte_core/pyo3 and is
+# only compiled when the `flyte` feature is enabled).
+flyte = { version = "0.1", optional = true }
+
+[features]
+default = []
+# Uses https://github.com/flyteorg/flyte-sdk-rs for durable, traced trial
+# execution on a Flyte / Union backend.
+flyte = ["dep:flyte"]

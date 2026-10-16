@@ -18,7 +18,7 @@ class ManifestError(AgentLockError):
 
 
 class LockfileError(AgentLockError):
-    """An agent.lock is malformed, stale, or out of schema."""
+    """An hpm.lock is malformed, stale, or out of schema."""
 
 
 class CheckFailed(AgentLockError):

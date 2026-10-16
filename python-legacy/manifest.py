@@ -1,4 +1,4 @@
-"""The manifest: ``agentlock.toml``.
+"""The manifest: ``hpm.toml``.
 
 Declares what the tuner is allowed to try (candidates), what must be present
 (peripherals), and what "best" means (objective / budget). Parsed into typed
@@ -94,7 +94,7 @@ class Candidates(BaseModel):
 
 
 class Manifest(BaseModel):
-    """Parsed ``agentlock.toml``."""
+    """Parsed ``hpm.toml``."""
 
     project: dict[str, Any] = Field(default_factory=dict)
     tasks: dict[str, Any] = Field(default_factory=dict)
@@ -119,7 +119,7 @@ class Manifest(BaseModel):
         try:
             raw = tomllib.loads(p.read_text("utf-8"))
         except tomllib.TOMLDecodeError as e:
-            raise ManifestError(f"invalid agentlock.toml: {e}") from e
+            raise ManifestError(f"invalid hpm.toml: {e}") from e
         m = cls.from_dict(raw)
         m.source_path = p
         return m
@@ -152,7 +152,7 @@ class Manifest(BaseModel):
                 backend=Backend.from_toml(raw.get("backend", {}) or {}),
             )
         except (TypeError, ValueError) as e:
-            raise ManifestError(f"invalid agentlock.toml: {e}") from e
+            raise ManifestError(f"invalid hpm.toml: {e}") from e
         return manifest
 
     @property

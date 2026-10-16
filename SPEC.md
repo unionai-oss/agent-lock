@@ -2,10 +2,19 @@
 
 > **Lock your agent into place.**
 > Bring your domain tasks, the models you're allowed to use, and the harness you like.
-> `harness-package-manager` searches the stack, measures it, and writes an `agent.lock`: a pinned,
+> `harness-package-manager` searches the stack, measures it, and writes an `hpm.lock`: a pinned,
 > version-controlled, enforceable description of the agent that actually works for your domain.
 
 Status: draft · Owner: Niels Bantilan · Last updated: 2026-10-16
+
+> **Implementation note (rust pivot).** The core is implemented in **Rust**
+> (`crates/hpm-core`, the `hpm` crate, `cargo`-installable), with **Python
+> bindings** (PyO3) exposing the same Layer 0/1 API (`import hpm`, `hpm …`) so the
+> user surface stays as specified here. The tuning backend is built on
+> [flyte-sdk-rs](https://github.com/flyteorg/flyte-sdk-rs) behind the `flyte`
+> cargo feature (provisional). A reference pure-Python implementation is preserved
+> in `python-legacy/`. Where the spec shows `import agent_lock` / `al`,
+> read `hpm`.
 
 ---
 
@@ -16,9 +25,9 @@ treats an agent system the way a package manager treats dependencies:
 
 | Package manager            | harness-package-manager                                                        |
 |----------------------------|-------------------------------------------------------------------|
-| `pyproject.toml`           | `agentlock.toml`: the **manifest**. What you allow and require.   |
+| `pyproject.toml`           | `hpm.toml`: the **manifest**. What you allow and require.   |
 | dependency resolver        | **tuner**: search over LLMs × decision models × harnesses × policies, scored against domain tasks |
-| `uv.lock` / `Cargo.lock`   | `agent.lock`: the **lockfile**. Exactly what was chosen, pinned and hashed, plus the evidence for choosing it |
+| `uv.lock` / `Cargo.lock`   | `hpm.lock`: the **lockfile**. Exactly what was chosen, pinned and hashed, plus the evidence for choosing it |
 | `uv sync`                  | `hpm sync`: materialize the locked stack in an environment |
 | `uv lock --upgrade-package`| `hpm update <component>`: re-resolve part of the stack and diff the evidence |
 | CI `--locked` check        | `hpm check` / `hpm verify`: fail if the running stack drifts from the lock |
@@ -100,7 +109,7 @@ The result is agents that degrade silently and can't be rolled back, diffed, or 
 
 ### Goals
 
-1. **One sharable artifact.** `agent.lock` fully describes a tuned agent stack and the
+1. **One sharable artifact.** `hpm.lock` fully describes a tuned agent stack and the
    evidence behind it. It is human-readable, diffable in a PR, and machine-enforceable.
 2. **Domain-specific tuning.** Optimize against *your* tasks (a task pack), not a generic
    leaderboard.
@@ -133,7 +142,7 @@ The result is agents that degrade silently and can't be rolled back, diffed, or 
 |---|---|
 | **Stack** | One concrete agent configuration: LLM assignment(s) + decision model + harness + tools + prompts + policies + runtime. |
 | **Component** | One axis of a stack (e.g. `llm.planner`, `decision.router`, `harness`, `policy.retries`). |
-| **Manifest** (`agentlock.toml`) | User-authored constraints: candidate components, task packs, objectives, budget, backend. |
+| **Manifest** (`hpm.toml`) | User-authored constraints: candidate components, task packs, objectives, budget, backend. |
 | **Search space** | The set of stacks implied by the manifest's candidates and constraints. |
 | **Task pack** | Versioned set of domain tasks + fixtures + graders. The unit of evaluation. |
 | **Trial** | One `(stack, task, seed)` execution. Produces a trace and grades. |
@@ -141,7 +150,7 @@ The result is agents that degrade silently and can't be rolled back, diffed, or 
 | **Grader** | Scores a trial: deterministic checks, artifact checks, or an LLM/judge model. |
 | **Decision model** | A small model (or rule set) that makes structured choices inside the harness loop: route, retry, escalate, stop, tool choice. |
 | **Tuner** | The search + evaluation + selection engine that turns a manifest into a lock. |
-| **Lock** (`agent.lock`) | The resolved stack, fully pinned, with hashes, provenance, and evaluation evidence. |
+| **Lock** (`hpm.lock`) | The resolved stack, fully pinned, with hashes, provenance, and evaluation evidence. |
 | **Adapter** | Plugin that teaches harness-package-manager how to configure, run, trace, and enforce a specific harness. |
 | **Backend** | Where the tuner executes: `local`, `devbox`, or `cluster`. |
 | **Peripheral** | Anything a harness plugs in besides the model: tools, MCP servers, skills, instruction files, subagents, hooks, commands, plugins, LSP servers, memory, retrieval indexes, etc. (§5.4). |
@@ -153,7 +162,7 @@ The result is agents that degrade silently and can't be rolled back, diffed, or 
 ### 4.1 The loop
 
 ```
- agentlock.toml ─┐
+ hpm.toml ─┐
  task packs ─────┤
                  ▼
           ┌─────────────┐   trials (fan-out)   ┌──────────────┐
@@ -167,15 +176,15 @@ The result is agents that degrade silently and can't be rolled back, diffed, or 
                          (optional) train decision model on traces
                                                       ▼
                                                ┌──────────────┐
-                                               │ select + pin │ ──► agent.lock
+                                               │ select + pin │ ──► hpm.lock
                                                └──────────────┘      + traces/ + report
 ```
 
 ---
 
-## 5. The `agent.lock` file
+## 5. The `hpm.lock` file
 
-`agent.lock` is the central artifact. It has three jobs:
+`hpm.lock` is the central artifact. It has three jobs:
 
 1. **Document.** What the agent is, and the evidence that it works.
 2. **Enforce.** What the runtime must match. `check`, `sync`, and the runtime guard read it.
@@ -198,7 +207,7 @@ The result is agents that degrade silently and can't be rolled back, diffed, or 
 lock-version = 1
 generated-by = "harness-package-manager 0.3.0"
 generated-at = "2026-10-16T14:02:11Z"
-manifest-hash = "sha256:9f1c…"          # agentlock.toml that produced this lock
+manifest-hash = "sha256:9f1c…"          # hpm.toml that produced this lock
 
 [stack]
 name = "ml-eng-debugger"
@@ -490,7 +499,7 @@ Enforcement happens at three points:
 1. **`hpm check`** (static, fast, offline-capable). Walks the component graph and
    runs each kind's checker. That verifies installed harness, MCP server, plugin, and LSP
    versions and integrity; skill directory and instruction-file digests; rendered config and
-   prompt hashes; the sandbox image digest; context isolation; and that `agentlock.toml`
+   prompt hashes; the sandbox image digest; context isolation; and that `hpm.toml`
    still hashes to `manifest-hash`. It also flags *undeclared* peripherals: a skill, hook,
    or MCP server present in the harness's config roots that isn't in the lock. Exit codes
    are CI-friendly.
@@ -526,9 +535,106 @@ partial update only pays for new trials. `diff` renders both a structural diff a
 **evidence diff** ("success-rate 0.87 → 0.89 (+0.02, CI overlaps); cost −31%"), suitable for
 pasting into a PR description. `hpm diff --format md` produces exactly that.
 
+### 5.8 Upgrading (`hpm upgrade`)
+
+`update` (§5.7) stays within a component's declared range and is conservative. `upgrade` is the
+deliberate, governed path for moving a component to a **newer major / breaking version** (or all
+dependent components at once), with a safe undo and a compatibility review gate:
+
+```bash
+hpm upgrade                          # plan-only: list upgradeable components + what changes
+hpm upgrade --all                    # upgrade every locked component that has a newer/breaking version
+hpm upgrade harness --to 2.0.0       # upgrade one component to a specific target
+hpm upgrade skill:pytorch-debugging mcp:github --dry-run
+hpm upgrade --apply                  # perform the upgrade + re-resolve dependents + re-evaluate
+hpm upgrade --rollback               # restore the previous hpm.lock if the upgrade regressed
+```
+
+Guarantees and behavior:
+
+- **Safe undo.** The previous `hpm.lock` is retained (as `hpm.lock.prev`, or on the working
+  branch) so `--rollback` is one command and every change stays PR-reviewable via `hpm diff`.
+- **Edge-aware re-resolution.** Re-resolves the component's `requires`/`provides` edges (§5.3):
+  upgrading a bundle re-resolves what it provides; upgrading a skill re-checks its dependents.
+- **Cost-controlled re-evaluation.** Runs only the affected components' trials on the
+  search/holdout splits (everything else is cached, §8.3) and reports an evidence diff
+  (`hpm diff --format md`) for the PR description.
+- **Gate.** `upgrade` will not apply unless the new evidence meets `[objective]` constraints
+  (`--force` overrides). `hpm check` after an upgrade enforces the new lock, and
+  `hpm verify` re-probes fingerprints (§5.5).
+- **Discovery.** `hpm outdated` lists the components `upgrade` (or `update`) can move.
+
+| | `hpm update` (§5.7) | `hpm upgrade` (§5.8) |
+|---|---|---|
+| Scope | within a declared range | across majors / breaking |
+| Default | re-resolve pinned components | plan / gate / apply-rollback |
+| Safety | minimal, cached | undoable, gated, evidence-checked |
+
+### 5.9 The optimization lock (`harness.opt.lock`)
+
+`hpm optimize` (§8.5) writes a second, *derived* lockfile — `harness.opt.lock` (name is
+`--out`-renamable) — that records an **optimizer's output** rather than a search's selection.
+It is a superset of the schema-v1 lock (so `hpm check` / `hpm verify` work on it) plus
+optimizer-specific tables:
+
+```toml
+# This file is generated by harness-package-manager. Do not edit by hand.
+lock-version = 1
+generated-by = "harness-package-manager 0.4.0 (optimize 1)"
+base-lock = "sha256:9f1c…"          # the hpm.lock it was derived from
+kind = "optimized"
+
+[stack]
+name = "ml-eng-debugger"
+selection = "pareto:min-cost@quality>=0.85"
+
+# ---- Prompt tuning (depth >= prompt) ----
+[[optimize.prompt.applied]]
+component = "harness.system-prompt"
+before = "sha256:b1"                 # content-hash before
+after = "sha256:b2"                  # content-hash after (never inlined)
+gain = { "success-rate" = "+0.03", "cost-usd-per-task" = "-0.12" }
+
+# ---- Hyperparameter search (depth >= hpo) ----
+[optimize.hpo]
+axes = { retries = [0, 1, 3], temperature = [0.0, 0.2, 0.7], "tool-timeout-seconds" = [30, 120] }
+trials = 214
+best = { retries = 1, temperature = 0.2, "tool-timeout-seconds" = 120 }
+
+# ---- Fine-tuning (depth >= ft) ----
+[[optimize.finetune]]
+target = "decision"                  # decision model fine-tuned on traces
+base = "hf://harness-package-manager/decider-1.5b"
+data = "traces://…"                  # provenance of the fine-tune dataset
+adapter = { lora = "store://sha256:8e7f…" }   # content-addressed LoRA
+samples = 3142
+loss = 0.11
+
+# ---- data provenance ----
+[optimize.data]
+source = "user:./runs"               # or "hub:agent-lock/traces" | "synthetic"
+mode = "user-traces"            # or "synthetic"
+redact = true
+split = { train = 0.8, val = 0.1, test = 0.1 }
+
+[optimize.provenance]
+run = "flyte://…"                    # the (durable) run that produced it
+budget = { "spend-usd" = 18.4, "gpu-h" = 1.2 }
+duration-s = 912
+
+[evidence]                            # re-measured on holdout after optimization
+# … same shape as hpm.lock's evidence
+```
+
+`harness.opt.lock` is **not** a replacement for `hpm.lock` — it is the researched,
+higher-performing candidate. It is adopted into the enforceable lock with
+`hpm lock --from harness.opt.lock` / `hpm adopt harness.opt.lock` once the team decides to
+ship it; at that point the optimizer's changes become pinned, enforced behavior with the same
+`check`/`verify`/`run` guarantees as any other locked stack.
+
 ---
 
-## 6. The manifest: `agentlock.toml`
+## 6. The manifest: `hpm.toml`
 
 User-authored. Declares candidates and constraints; the tuner resolves them into a lock.
 
@@ -1011,7 +1117,7 @@ up in `hpm diff`.
 - **`npx skills` (skills.sh CLI).** It already writes a project `skills-lock.json` and a
   user-level `~/.agents/.skill-lock.json`. `hpm skills import skills-lock.json` turns an
   existing setup into manifest entries. `hpm sync` can also write a compatible
-  `skills-lock.json`, so teammates using `npx skills` see the same set. `agent.lock` stays
+  `skills-lock.json`, so teammates using `npx skills` see the same set. `hpm.lock` stays
   the source of truth because it also carries digests, trust, and evidence.
 - **Harness installers** (Codex's `$skill-installer`, Claude plugin marketplaces). Skills
   installed this way land in config roots that `check` scans, and they're reported as
@@ -1115,7 +1221,7 @@ lock_pipeline(manifest)                         @env.task
 ├── train_decision_model(traces)  [optional]   @gpu_env.task  cache
 ├── evaluate_holdout(finalists)                fan-out of run_trial
 ├── fingerprint(finalist LLMs)                 @env.task
-└── write_lock(winner, evidence)               @env.task → agent.lock + store blobs
+└── write_lock(winner, evidence)               @env.task → hpm.lock + store blobs
 ```
 
 Durability properties this gives us:
@@ -1153,6 +1259,70 @@ Durability properties this gives us:
 Strategies are pure Python behind a `Strategy` protocol (§9.2), so they're usable without
 knowing Flyte.
 
+### 8.5 Optimization pipeline (`hpm optimize`)
+
+`optimize` is the compute-heavy step: instead of *selecting* among given components (the tuner,
+§4.1), it *produces* improvements to the harness — prompt tuning, hyperparameter optimization,
+and fine-tuning of small LLMs / decision models — and writes them to `harness.opt.lock` (§5.9).
+It runs on the same Flyte 2 pipeline as `lock` (§8.1–8.3), inserting an **optimizer stage**
+between `grade_trials` and `select`, so all durability properties (caching, resume, retries,
+lineage, fan-out) apply. On `local` it is the same in-process path.
+
+```
+hpm optimize [flags]  →  harness.opt.lock  (+ report + store blobs)
+```
+
+**Depth of optimization** (`--depth`, defaults to `auto`). The user chooses how deep to go;
+each level is a superset of the previous:
+
+```bash
+hpm optimize --depth probe        # cheap prompt/policy probes (minutes, no retrain)
+hpm optimize --depth prompt       # + system-prompt & instructions search (applied as new digests)
+hpm optimize --depth hpo          # + hyperparameter optimization (retries, temps, timeouts, context…)
+hpm optimize --depth ft           # + fine-tune small decision/judge/LLMs (LoRA) on the chosen data
+hpm optimize --depth full         # + workflow compilation + end-to-end holdout re-validation
+hpm optimize --depth auto         # pick the deepest level the budget allows
+```
+
+**Data source** (`--data`). Optimization is driven by real behavior where possible and
+synthetic data where not:
+
+- **User traces** — `--data user` (default when harness trace stores are found). `optimize`
+  finds traces using each harness adapter's knowledge of where that harness records runs
+  (`config_roots`, §7.4; trace store, §10):
+  - proxy-instrumented CLI harnesses: `~/.config/opencode/…`, `~/.pi/…`, `~/.claude/…`, `~/.codex/…`
+  - Flyte-backed harnesses: runs under `flyte://org/project/domain`
+  - explicit: `--data user:./runs,agentlock-traces.jsonl` or `hpm traces export` output
+  - a hub pack: `--data hub:agent-lock/traces`
+- **Synthetic** — `--data synthetic[:<n>]`: generates tasks from the task pack (failure
+  seeding, tool-error recovery, prompt-injection attempts) plus optional LLM-authored
+  variants to cover the space real traces under-sample.
+
+**Flags & subcommands** (options are composable):
+
+```bash
+hpm optimize --harness opencode      # restrict to one harness
+hpm optimize --prompt-only           # only pitch prompt/instructions changes (no training)
+hpm optimize --no-finetune           # skip GPU fine-tuning
+hpm optimize --axes retries,temperature,tool-timeout-seconds
+hpm optimize --max-steps 60 --max-tokens 2000
+hpm optimize --out harness.opt.lock  # default filename — user-renamable
+hpm optimize --budget spend-usd=50,gpu-h=1,max-trials=1000
+hpm optimize --strict                # fail unless the opt lock beats the base on [objective]
+hpm optimize --apply                 # also adopt the result into hpm.lock
+hpm optimize diff                    # optimizer changes vs: base (evidence + content)
+hpm optimize reuse-traces --dir …    # point at an exact trace directory
+hpm optimize dry-run                 # print plan + cost estimate, run nothing
+```
+
+**Evaluation discipline.** `optimize` re-runs the optimized stack against the **holdout** split
+(at `--depth full`, or on request) and only records a gain when it is distinguishable with
+bootstrap CIs (§8.4). `--strict` refuses to emit `harness.opt.lock` if it does not beat the base
+on `[objective]`. Everything the optimizer produces — applied prompts, chosen hyperparameters,
+fine-tune LoRA weights, the data split, the budget — is content-addressed in the store and
+recorded in `harness.opt.lock` (§5.9), so optimization is itself reproducible from its
+provenance run and diffable in a PR.
+
 ---
 
 ## 9. Layered API
@@ -1161,7 +1331,7 @@ The rule: **each layer down exposes more control and requires more knowledge. Fl
 only at Layer 3.** Layers 0–2 import nothing from `flyte` in user code.
 
 ```
-Layer 0  CLI + agentlock.toml             "I have tasks and API keys"
+Layer 0  CLI + hpm.toml             "I have tasks and API keys"
 Layer 1  Python API (hpm)          "I want to script and embed this"
 Layer 2  Extension points + profiles      "I need custom graders/strategies/adapters/resources"
 Layer 3  Flyte-native (hpm.flyte)  "I'm composing this into my own Flyte pipelines/infra"
@@ -1175,8 +1345,8 @@ scripts and for environments where `hpm` is already taken.
 
 ```bash
 pip install harness-package-manager
-hpm init                               # interactive: pick a pack, providers, harness → agentlock.toml
-hpm lock                               # tune → agent.lock (+ .agentlock/report.html)
+hpm init                               # interactive: pick a pack, providers, harness → hpm.toml
+hpm lock                               # tune → hpm.lock (+ .agentlock/report.html)
 hpm show                               # pretty-print the lock + evidence
 hpm tree                               # component dependency graph (models, harness, skills, MCP, capabilities, …)
 hpm add|remove <kind> <src>            # add/remove a peripheral (skill, mcp, tool, native kind) and re-lock it
@@ -1184,8 +1354,11 @@ hpm sync                               # install/pin harness, peripherals, sandb
 hpm run "fix the failing test in ./repo"             # run the locked agent with runtime guard
 hpm check                              # static lock verification (CI)
 hpm verify                             # canary + fingerprint re-check (scheduled CI)
-hpm update <component>|--all           # partial/full re-resolve
+hpm update <component>|--all           # partial/full re-resolve (within range, §5.7)
+hpm upgrade [component…|--all] [--dry-run] [--apply|--rollback] [--to <version>]   # major/breaking, undoable (§5.8)
 hpm diff [--format md]                 # structural + evidence diff vs. committed lock
+hpm optimize [--depth probe|prompt|hpo|ft|full|auto] [--data user|synthetic[:n]|hub:…|user:<paths>] [--out NAME] [--strict] (see §8.5)
+                                       # optimize the harness -> harness.opt.lock
 hpm export --format docker|flyte|langgraph           # emit a deployable bundle for the locked stack
 hpm leaderboard [--pack <name>]                      # ranked stacks from the last search (Pareto front)
 hpm outdated                           # locked peripherals (skills, MCP, plugins, harness) with newer upstream versions
@@ -1202,7 +1375,7 @@ an installable domain agent system and not only a leaderboard:
 
 ```
 dist/
-  agent.lock            # copied verbatim; the source of truth
+  hpm.lock            # copied verbatim; the source of truth
   agent.yaml            # harness-native config rendered from the lock
   policy.yaml           # runtime policies for the guard
   eval_report.md        # evidence, leaderboard, and baseline comparison
@@ -1217,8 +1390,8 @@ dist/
 ```python
 import hpm
 
-manifest = hpm.Manifest.load("agentlock.toml")
-lock = hpm.lock(manifest, backend="local")       # returns hpm.Lock; writes agent.lock
+manifest = hpm.Manifest.load("hpm.toml")
+lock = hpm.lock(manifest, backend="local")       # returns hpm.Lock; writes hpm.lock
 print(lock.evidence.summary())
 
 # Programmatic manifest
@@ -1238,7 +1411,7 @@ lock = hpm.lock(
 )
 
 # Use the lock at runtime
-agent = hpm.load("agent.lock")
+agent = hpm.load("hpm.lock")
 result = await agent.run("Clean ./data/orders.csv and report anomalies")
 ```
 
@@ -1317,7 +1490,7 @@ async def nightly_relock(manifest_path: str) -> str:
 
 if __name__ == "__main__":
     flyte.init_from_config()
-    run = flyte.run(nightly_relock, manifest_path="s3://acme/agents/agentlock.toml")
+    run = flyte.run(nightly_relock, manifest_path="s3://acme/agents/hpm.toml")
     print(run.url)
 ```
 
@@ -1459,8 +1632,8 @@ assistant" is neither defensible nor useful here.
 hpm/
   __init__.py            # Layer 1: lock(), load(), Manifest, SearchSpace, Objective, Budget, …
   cli/                   # Layer 0
-  manifest/              # agentlock.toml parsing, validation, hashing
-  lockfile/              # agent.lock schema, (de)serialization, diff, check
+  manifest/              # hpm.toml parsing, validation, hashing
+  lockfile/              # hpm.lock schema, (de)serialization, diff, check
   store/                 # content-addressed blob store (local dir, s3/gcs/azure via fsspec)
   tasks/                 # task packs, graders, splits, Hub client
   providers/             # LLM providers, alias resolution, pricing, fingerprints, serving
@@ -1477,7 +1650,7 @@ hpm/
   backends/              # Layer 2: Profile/Resources → Flyte mapping; local/devbox/cluster
   flyte/                 # Layer 3: envs, tasks, images (the tuning pipeline)
 examples/
-  research-agent/        # agentlock.toml + committed agent.lock for each example
+  research-agent/        # hpm.toml + committed hpm.lock for each example
   data-analysis-agent/
   code-execution-agent/
 ```
@@ -1490,7 +1663,7 @@ Install extras: `harness-package-manager[vllm]`, `harness-package-manager[train]
 ## 14. Roadmap
 
 **v0.1: "first lock in 10 minutes"** (local only)
-- `init`, `lock`, `show`, `check`, `run` · `agent.lock` schema v1
+- `init`, `lock`, `show`, `check`, `run` · `hpm.lock` schema v1
 - Adapters: `reference`, `opencode`, `claude-agent-sdk`
 - Component model with portable kinds `tool`, `mcp` (local), `skill`, `instructions`;
   context isolation; `tree`, `add`, `remove`
@@ -1519,6 +1692,8 @@ Install extras: `harness-package-manager[vllm]`, `harness-package-manager[train]
 - `cluster` backend (self-hosted Flyte and Union) · shared team cache
 - Open-weights candidates served on demand (vLLM/SGLang) · LoRA tuning of executor LLMs
 - `harness-package-manager/triage` · public `harness-package-manager/traces` dataset · leaderboard site per pack
+- **`upgrade`** (§5.8) with plan/apply/rollback · **`optimize`** (§8.5) with `probe|prompt|hpo|ft`
+  depths fuelled by user traces (auto-discovered per harness) or synthetic data → `harness.opt.lock`
 
 **v1.0**
 - Lock schema v1 frozen · Layer 3 stable · `export` targets · 10+ adapters · 8+ packs
@@ -1547,7 +1722,7 @@ Install extras: `harness-package-manager[vllm]`, `harness-package-manager[train]
    - an open model + decision model gets ~90% of the quality at a fraction of the cost,
    - OpenCode beats generic tool-calling on code-edit tasks,
    - a deterministic workflow beats an agent loop for repeatable data prep.
-5. `hpm lock` writes `agent.lock`. `export` ships it. The lock lands in a PR.
+5. `hpm lock` writes `hpm.lock`. `export` ships it. The lock lands in a PR.
 
 The illustrative numbers must be replaced with real, reproducible results before launch.
 
@@ -1558,7 +1733,7 @@ Per-pack leaderboards produce charts and debate:
 - "Claude vs GPT vs Qwen on real agent workflows."
 - "LangGraph vs OpenCode vs Pi on the same tasks."
 - "Which agent stack survives tool failures?"
-- "Your agent isn't production-ready until it has an `agent.lock`."
+- "Your agent isn't production-ready until it has an `hpm.lock`."
 
 ### 15.4 Launch artifacts
 
@@ -1568,8 +1743,8 @@ Flyte/Union cluster backend docs.
 
 ### 15.5 Success metrics
 
-- Time from `pip install` to first `agent.lock` on the local backend: **< 10 minutes**.
-- `agent.lock` files in public GitHub repos (search `filename:agent.lock lock-version`).
+- Time from `pip install` to first `hpm.lock` on the local backend: **< 10 minutes**.
+- `hpm.lock` files in public GitHub repos (search `filename:hpm.lock lock-version`).
 - Community task packs and adapters published.
 - Downloads of `harness-package-manager/decider` and `harness-package-manager/judge`.
 - Share of locks produced on devbox/cluster backends (the dial is working).
@@ -1580,12 +1755,17 @@ Flyte/Union cluster backend docs.
 
 ## 16. Open questions
 
-1. **Name collision.** Is `agent.lock` safe from collisions with other tools' lockfiles?
-   Should it be `agentlock.lock` for symmetry with `agentlock.toml`?
+1. **Name collision.** **Resolved:** the manifest is `hpm.toml` and the lockfile is `hpm.lock`
+   (renamed from `agentlock.toml` / `agent.lock`). Still worth checking `hpm.lock` against other
+tools' lockfiles before v1.0.
 2. **Lock scope.** One lock per agent, or a multi-agent lock (`[[agent]]` tables) for systems
    with several cooperating agents?
-3. **Prompt optimization.** Should system-prompt search (DSPy/GEPA-style) be a v1 search
-   axis or remain user-supplied candidates?
+3. **Prompt optimization — folded into `hpm optimize`.** System-prompt / instruction search now
+   lives in the `prompt` and `hpo` depths of `hpm optimize` (§8.5), where candidate prompts are
+   tuned and locked as new content digests in `harness.opt.lock` (§5.9) rather than floating
+   search axes in the manifest. Open question: how much of this *authorship* (prompt/instruction
+   edits) should also surface as first-class manifest search axes in v1, vs. staying an
+   optimizer-only concern?
 4. **Workflow compilation.** Compile repeated successful trajectories into deterministic
    Flyte workflows, so steps that don't need to be agentic stop being agentic, and
    generate a workflow from a task plan. That's a strong differentiator (and a natural use

@@ -1,6 +1,6 @@
 """Structural + evidence diff between the working lock and the committed one.
 
-``hpm diff`` compares the current ``agent.lock`` (the result of the last ``hpm lock``)
+``hpm diff`` compares the current ``hpm.lock`` (the result of the last ``hpm lock``)
 against the git-committed version, and renders an evidence diff suitable for a PR
 description.
 """
@@ -13,7 +13,7 @@ from hpm.lockfile import Lockfile
 
 
 class Diff:
-    def __init__(self, path: str | Path = "agent.lock") -> None:
+    def __init__(self, path: str | Path = "hpm.lock") -> None:
         self.path = Path(path)
         self.committed = self._read_committed()
 
@@ -36,7 +36,7 @@ class Diff:
     def run(self, fmt: str = "text") -> str:
         cur = Lockfile.load(self.path)
         if self.committed is None:
-            return f"[diff] no committed agent.lock to diff against (HEAD:{self.path})"
+            return f"[diff] no committed hpm.lock to diff against (HEAD:{self.path})"
 
         lines = []
         if self.committed.stack.get("name") != cur.stack.get("name"):
