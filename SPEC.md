@@ -19,9 +19,15 @@ treats an agent system the way a package manager treats dependencies:
 | `pyproject.toml`           | `agentlock.toml`: the **manifest**. What you allow and require.   |
 | dependency resolver        | **tuner**: search over LLMs × decision models × harnesses × policies, scored against domain tasks |
 | `uv.lock` / `Cargo.lock`   | `agent.lock`: the **lockfile**. Exactly what was chosen, pinned and hashed, plus the evidence for choosing it |
-| `uv sync`                  | `agent-lock sync`: materialize the locked stack in an environment |
-| `uv lock --upgrade-package`| `agent-lock update <component>`: re-resolve part of the stack and diff the evidence |
-| CI `--locked` check        | `agent-lock check` / `agent-lock verify`: fail if the running stack drifts from the lock |
+| `uv sync`                  | `al sync`: materialize the locked stack in an environment |
+| `uv lock --upgrade-package`| `al update <component>`: re-resolve part of the stack and diff the evidence |
+| CI `--locked` check        | `al check` / `al verify`: fail if the running stack drifts from the lock |
+| `uv add` / `uv tree`       | `al add skill …` / `al tree`: add and inspect the stack's dependencies |
+
+As in a package lock, the stack has **dependencies**, and they are resolved, pinned, and
+hashed like packages. Models and the harness are dependencies, and so are the things the
+harness plugs in: tools, MCP servers, skills, instruction files, subagents, hooks, commands,
+plugins, and harness-native extensions such as Pydantic AI *capabilities* (§5.3, §7.6).
 
 The tuning backend runs on **Flyte 2** for durability (retries, caching, resumability,
 fan-out, lineage), with a single dial for how much infrastructure it uses:
@@ -117,7 +123,7 @@ The result is agents that degrade silently and can't be rolled back, diffed, or 
 - Training frontier-scale models. Fine-tuning is limited to small decision/judge models
   and, optionally, LoRA adapters on open-weights LLMs.
 - Guaranteeing bit-exact determinism for closed API models. The lock pins what *can* be
-  pinned and fingerprints the rest (§5.4).
+  pinned and fingerprints the rest (§5.5).
 
 ---
 
@@ -138,6 +144,11 @@ The result is agents that degrade silently and can't be rolled back, diffed, or 
 | **Lock** (`agent.lock`) | The resolved stack, fully pinned, with hashes, provenance, and evaluation evidence. |
 | **Adapter** | Plugin that teaches agent-lock how to configure, run, trace, and enforce a specific harness. |
 | **Backend** | Where the tuner executes: `local`, `devbox`, or `cluster`. |
+| **Peripheral** | Anything a harness plugs in besides the model: tools, MCP servers, skills, instruction files, subagents, hooks, commands, plugins, LSP servers, memory, retrieval indexes, etc. (§5.4). |
+| **Component kind** | A typed category of lockable dependency (`skill`, `mcp`, `pydantic-ai.capability`, …) with its own schema, resolver, hasher, materializer, and checker (§5.3, §7.6). |
+| **Portable kind** | A kind defined by agent-lock (or an open standard) that adapters can install into *any* supporting harness, e.g. Agent Skills, MCP servers, `AGENTS.md`. |
+| **Native kind** | A kind that only exists in one harness, registered by its adapter under a namespace, e.g. `pydantic-ai.capability`, `opencode.plugin`, `pi.extension`, `claude.hook`. |
+| **Bundle** | A component that expands into other components (Claude Code plugin, Pi package, a Pydantic AI capability that brings tools + instructions + hooks). |
 
 ### 4.1 The loop
 
@@ -201,7 +212,7 @@ provider = "anthropic"
 model = "claude-sonnet-5-5"              # never an alias; aliases are resolved at lock time
 resolved-from = "anthropic:claude-sonnet-latest"
 params = { temperature = 0.2, max_tokens = 8192 }
-fingerprint = "sha256:41aa…"             # behavioral fingerprint, see §5.4
+fingerprint = "sha256:41aa…"             # behavioral fingerprint, see §5.5
 
 [[llm]]
 role = "executor"
@@ -249,6 +260,84 @@ integrity = "sha512-…"
 schema = "sha256:f00d…"                  # hash of the tool list the server advertised at lock time
 permissions = ["read:repo", "write:pull_request"]
 
+# ---------- Skills (Agent Skills / SKILL.md), see §7.7 ----------
+[[skill]]                                # third-party, OSS vendor catalog
+name = "pdf"
+origin = "third-party"
+source = "git+https://github.com/anthropics/skills@9b1e2f0#path=skills/pdf"
+registry = "skills.sh:anthropics/skills/pdf"   # how it was found; the git commit is what's pinned
+digest = "sha256:51c2…"                  # tree digest: SKILL.md + scripts/ + references/ + assets/
+spec = "agentskills/1"
+license = "Proprietary (see LICENSE.txt)"
+frontmatter = "sha256:0e9d…"             # name, description, compatibility, allowed-tools, metadata
+allowed-tools = "Bash(python:*) Read"    # mapped onto [policy]; anything broader is a lock error
+executes = ["scripts/fill_form.py", "scripts/extract.py"]
+runtime-deps = "sha256:aa7c…"            # pinned pip/npm/system deps baked into the sandbox image
+scan = { tool = "agent-lock-scan@0.2.0", result = "pass", report = "store://sha256:c3f1…" }
+install = "native"                       # adapter decides the path (.opencode/skills/, .claude/skills/, …)
+requires = ["tool:python"]               # edges in the dependency graph
+
+[[skill]]                                # first-party, in this repo
+name = "flyte-sdk"
+origin = "first-party"
+source = "path:./skills/flyte-sdk"
+digest = "sha256:8f42…"
+editable = true                          # like `pip -e`: edits mark evidence stale instead of failing check
+evidence-digest = "sha256:8f42…"         # digest the evidence was measured with
+
+[[skill]]                                # first-party, private org repo
+name = "pytorch-debugging"
+origin = "first-party"
+source = "git+ssh://git@github.com/acme/agent-skills@4f2a9c1#path=skills/pytorch-debugging"
+digest = "sha256:7c10…"
+signature = { kind = "sigstore", identity = "https://github.com/acme/agent-skills/.github/workflows/release.yml@refs/tags/v1.3.0" }
+requires = ["tool:python"]
+
+[[skill]]                                # shipped inside the harness: not installed, but still locked
+name = "skill-creator"
+origin = "harness-builtin"
+provided-by = "harness:codex-cli"
+digest = "sha256:19de…"                  # read from the installed harness at lock time
+enabled = false                          # built-ins are explicitly enabled or disabled, never implicit
+
+[[skill]]                                # arrived inside a bundle (plugin / package)
+name = "repo-conventions"
+origin = "bundled"
+provided-by = "native:opencode-safe-git"
+digest = "sha256:6b0a…"
+
+# ---------- Instructions ----------
+[[instructions]]
+name = "AGENTS.md"
+digest = "sha256:3e5b…"
+scope = "project"
+
+# ---------- Context isolation ----------
+[context]
+isolation = "locked-only"                # ignore ~/.config/opencode, ~/.claude, ~/.codex, ~/.pi, etc.
+compaction = { strategy = "harness-default", threshold = 0.85 }
+tool-output-limit-tokens = 20000
+
+# ---------- Subagents ----------
+[[subagent]]
+name = "test-runner"
+llm = "executor"                         # reference a locked [[llm]] role
+tools = ["python", "filesystem"]
+prompt = "sha256:9a0e…"
+
+# ---------- Harness-native components (namespaced by adapter) ----------
+[[native]]
+kind = "opencode.plugin"
+name = "opencode-safe-git"
+source = "npm:opencode-safe-git@0.4.1"
+integrity = "sha512-…"
+
+[[native]]
+kind = "opencode.lsp"
+name = "pyright"
+source = "npm:pyright@1.1.405"
+integrity = "sha512-…"
+
 # ---------- Policies (enforced at runtime) ----------
 [policy]
 retries = 1
@@ -281,7 +370,7 @@ cost-usd-per-task = 1.12
 
 # ---------- Drift guards ----------
 [verify]
-canary-tasks = 12                        # subset re-run by `agent-lock verify`
+canary-tasks = 12                                # subset re-run by `al verify`
 min-success-rate = 0.80                  # fail verify below this
 fingerprint-tolerance = 0.15             # max behavioral distance before warning
 
@@ -292,42 +381,128 @@ run = "flyte://my-org/agent-lock/development/r8x2k1"
 search = { strategy = "successive-halving", candidates = 48, trials = 1312, spend-usd = 214.07 }
 ```
 
-### 5.3 What gets pinned
+### 5.3 Component model: the stack as a dependency graph
 
-| Component | Pinned by |
+Everything in a lock is a **component** of some **kind**, and every component shares one
+envelope:
+
+| Field | Meaning |
 |---|---|
-| Closed API LLM | Exact dated model ID (alias resolved at lock time), params, behavioral fingerprint |
-| Open-weights LLM | HF repo + commit + weights digest, LoRA digest, serving engine + version + dtype |
-| Decision model | Weights digest (+ adapter), thresholds, decision set |
-| Harness | Package source + version + integrity hash, adapter version, rendered config hash, prompts hash |
-| Tools | Builtin schema hash; MCP server package + version + integrity + advertised-schema hash; permissions |
-| Policies | Literal values (small, inlined so they're reviewable in PRs) |
-| Runtime | Sandbox image digest, network policy |
-| Task pack | Name, version, content hash |
+| `kind` | Core kind (`llm`, `decision`, `harness`, `tool`, `mcp`, `skill`, `instructions`, `subagent`, `hook`, `command`, …) or a namespaced native kind (`pydantic-ai.capability`). |
+| `name` | Unique within its kind. `kind:name` is the component ID used in edges. |
+| `source` | Where it came from: `npm:`, `pypi:`, `git+…@rev`, `hf://`, `oci://`, `path:`, `https://` (remote), `inline`. |
+| `version` / `revision` | Resolved version or commit. Never a range or a moving ref. |
+| `digest` / `integrity` | Content hash of the artifact (package integrity, directory digest, weights digest, image digest). |
+| `config` | Hash of the rendered configuration for this component, if any. |
+| `requires` | Edges to other component IDs (a skill requires `tool:python`; a subagent requires an `llm` role). |
+| `provides` | For bundles: the component IDs it expands into. |
+| `scope` | Where it applies: the whole stack, one LLM role, one subagent, or one harness. |
+| `enforce` | `pin` (checked and guarded), `record` (provenance only), or `off`. |
 
-### 5.4 Behavioral fingerprints
+Components form a DAG. `al tree` prints it. `update` follows the edges, so updating a
+bundle re-resolves what it provides, and updating a skill re-checks what requires it.
+
+**Pinning strategies**, chosen per kind:
+
+| Strategy | Used when | Example |
+|---|---|---|
+| **artifact** | We can hash the bytes | skill directory, sandbox image, open weights, plugin tarball |
+| **version + integrity** | A package manager can reproduce it | `npm:opencode-ai@1.4.2` + `sha512-…`, `pypi:pydantic-ai-harness==0.6.1` + wheel hash |
+| **snapshot** | It's data that changes over time | retrieval index, memory seed, fixtures |
+| **endpoint + fingerprint** | It's remote and we can't pin bytes | closed LLM, remote MCP server, A2A agent, provider-native tools |
+| **literal** | Small and worth reviewing in a PR | policies, thresholds, params |
+
+**Portable vs. native kinds.** Portable kinds are defined once and installed into any harness
+whose adapter supports them. The adapter knows where an Agent Skill goes for OpenCode versus
+Claude Agent SDK versus Codex, and how to register an MCP server in each config format. That
+lets the tuner hold a skill or MCP server constant while it swaps harnesses. Native kinds only
+exist for one harness and are registered by its adapter (§7.6). When the manifest searches
+across harnesses, native components sit under the harness they belong to and only apply when
+that harness is chosen.
+
+**Bundles are locked twice.** A bundle (Claude Code plugin, Pi package, OpenCode plugin,
+Pydantic AI capability) is pinned as itself *and* expanded into what it provides. `check`
+catches a bundle whose version is unchanged but whose contents changed.
+
+### 5.4 Peripherals worth locking
+
+What a modern harness plugs in, based on the configuration surfaces of OpenCode, Pi,
+Claude Agent SDK / Claude Code, Codex CLI, and Pydantic AI (+ Pydantic AI Harness), plus the
+Agent Skills, MCP, and AGENTS.md standards. "Behavior" means changing it can change task
+outcomes, so it's enforced. "Record" means provenance only.
+
+| Peripheral | Examples across harnesses | Kind | Pinning | Lock role | Search axis? |
+|---|---|---|---|---|---|
+| **Built-in tools** | Pi's read/write/edit/bash; OpenCode `tools`; Claude Code built-ins | `tool` | harness version + tool schema hash | behavior | enable/disable sets |
+| **Function tools** | Pydantic AI function tools / toolsets; LangGraph tools | `tool` | source digest of the module + schema hash | behavior | yes |
+| **MCP servers (local)** | stdio servers in `opencode.json`, Codex `config.toml [mcp_servers]`, Claude `mcpServers` | `mcp` | version + integrity; advertised tools/resources/prompts schema hash | behavior | include/exclude, version |
+| **MCP servers (remote)** | HTTP/SSE servers, vendor-hosted MCP | `mcp` | URL + OAuth scopes + advertised-schema fingerprint | behavior (warn on drift) | include/exclude |
+| **Skills** | Agent Skills (`SKILL.md` + scripts + references), adopted by Claude, Codex, OpenCode, Pi, VS Code, Cursor, and others | `skill` | commit + tree digest; script deps pinned with it; origin, trust, scan (§7.7) | behavior | include/exclude, variants |
+| **Instruction files** | `AGENTS.md`, `CLAUDE.md` + rules, Cursor rules, OpenCode rules | `instructions` | content digest per file, plus hierarchy order | behavior | variants |
+| **System prompt / output style** | custom system prompts, Claude output styles, prompt append vs. replace | `prompt` | content digest | behavior | variants |
+| **Subagents** | Claude/OpenCode agent definitions, Pydantic AI `Subagents`, LangGraph sub-graphs | `subagent` | prompt digest + model role + tool list | behavior | yes |
+| **Hooks** | Claude Code hook events (PreToolUse, Stop, …), Pi extension events, Pydantic AI hooks | `hook` | command/source digest + event binding | behavior | rarely |
+| **Commands / prompt templates** | Claude & OpenCode slash commands, Pi prompt templates | `command` | content digest | record (behavior if a task invokes them) | no |
+| **Plugins / packages / extensions** | Claude Code plugins, OpenCode plugins, Pi packages & extensions | bundle (native) | version + integrity, expanded | behavior | include/exclude |
+| **Harness-native capabilities** | Pydantic AI capabilities (Thinking, Planning, Memory, Compaction, Guardrails, …) | `pydantic-ai.capability` | import path + package version + args hash | behavior | yes (args, include/exclude) |
+| **Agent modes / profiles** | OpenCode agents (build/plan), Codex profiles, Pi plan mode | native | config hash | behavior | yes |
+| **Permissions / approval rules** | OpenCode `permission`, Claude permission rules, Codex approval & sandbox modes | `policy` | literal | behavior | yes |
+| **LSP servers, formatters, linters** | OpenCode `lsp` and `formatter`; diagnostics fed back to the model | native / `toolchain` | binary version + integrity | behavior | sometimes |
+| **Execution environment** | sandbox image, language runtimes, OS packages, non-secret env vars, workspace layout | `runtime` | image digest + lockfiles | behavior | rarely |
+| **Context management** | compaction strategy and thresholds, tool-output limits, prompt caching, deferred tool loading / tool search | `context` | literal | behavior | yes |
+| **Provider features** | reasoning/thinking effort, provider-native tools (web search, code exec), API version and beta headers, structured-output schemas | part of `llm` | literal + fingerprint | behavior | yes |
+| **Memory** | memory files and stores, Pydantic AI `Memory`, conversation search | `memory` | backend + schema + *seed snapshot* (never live contents) | behavior | on/off, scope |
+| **Retrieval / knowledge** | embedding model, chunking, index snapshot, reranker, vector DB version | `retrieval` | snapshot digest + model digests | behavior | yes |
+| **Browser / computer use** | Playwright or Browser Use versions, viewport, browser build | `browser` | version + image digest | behavior | rarely |
+| **Guardrails** | prompt-injection defenders, content filters, spend limits, trajectory judges | `guardrail` | source + config hash | behavior | yes |
+| **Remote agents** | A2A agent cards, hosted subagents | `remote-agent` | URL + card digest + fingerprint | behavior (warn on drift) | include/exclude |
+| **Gateway / routing** | LiteLLM or another gateway, fallback chains | `gateway` | version + config hash | behavior | fallback order |
+| **Telemetry** | OTel exporters, Logfire, LangSmith | `telemetry` | version | record | no |
+| **External APIs behind tools** | the GitHub API behind an MCP server, SaaS endpoints | (`requires` on the tool) | API version where one exists; otherwise recorded responses in fixtures | record | no |
+
+Two cross-cutting rules come out of this survey:
+
+1. **Context isolation is part of the lock.** Most harnesses silently merge user-level config
+   (`~/.claude`, `~/.config/opencode`, `~/.codex`, `~/.pi`), which makes a "locked" agent
+   behave differently on every machine. `[context].isolation = "locked-only"` (the default)
+   makes adapters run the harness with an isolated config root, for example the Claude Agent
+   SDK's explicit `settingSources` or a temporary `HOME`. `"merge-user"` is an explicit opt-out,
+   and `check` warns about it.
+2. **Live state is never locked; its seed is.** Memory stores, retrieval indexes, and
+   workspaces change while the agent runs. The lock pins their schema, backend version, and
+   starting snapshot. During tuning, each trial starts from that snapshot so memory can't
+   leak between trials.
+
+### 5.5 Behavioral fingerprints
 
 Closed models can't be pinned by weights, and providers sometimes change behavior under a
 fixed model ID. A **fingerprint** is a hash over the model's outputs on a fixed, small
 probe set (fixed prompts, `temperature=0`, structured outputs), plus an embedding summary
-used for a *distance* metric. `agent-lock verify` re-probes and reports the distance. Above
+used for a *distance* metric. `al verify` re-probes and reports the distance. Above
 `fingerprint-tolerance` it warns; with `--strict` it fails.
 
 Fingerprints are evidence, not a guarantee. The spec says so plainly in the CLI output.
 
-### 5.5 Enforcement
+### 5.6 Enforcement
 
 Enforcement happens at three points:
 
-1. **`agent-lock check`** (static, fast, offline-capable). Verifies installed harness/MCP
-   versions and integrity, rendered config and prompt hashes, sandbox image digest, and that
-   `agentlock.toml` still hashes to `manifest-hash`. Exit codes are CI-friendly.
-2. **`agent-lock verify`** (dynamic, costs money). Re-runs the canary tasks and fingerprint
-   probes against live providers and compares them to the evidence and thresholds.
+1. **`al check`** (static, fast, offline-capable). Walks the component graph and
+   runs each kind's checker. That verifies installed harness, MCP server, plugin, and LSP
+   versions and integrity; skill directory and instruction-file digests; rendered config and
+   prompt hashes; the sandbox image digest; context isolation; and that `agentlock.toml`
+   still hashes to `manifest-hash`. It also flags *undeclared* peripherals: a skill, hook,
+   or MCP server present in the harness's config roots that isn't in the lock. Exit codes
+   are CI-friendly.
+2. **`al verify`** (dynamic, costs money). Re-runs the canary tasks and fingerprint
+   probes against live providers, and re-reads the advertised schemas of remote MCP
+   servers and remote agents. Compares everything to the evidence and thresholds.
 3. **Runtime guard** (in-process, via adapters). When the agent runs through
-   `agent-lock run` or `agent_lock.runtime.guard(...)`:
+   `al run` or `agent_lock.runtime.guard(...)`:
    - model calls are checked against the locked provider/model/params; mismatch → error,
-   - tool calls are checked against `tool-allowlist` and `permissions`,
+   - tool and MCP calls are checked against `tool-allowlist`, `permissions`, and the locked
+     tool schemas (a server that starts advertising new tools is a violation),
+   - only locked skills, hooks, and native components are loadable,
    - `max-steps`, `max-cost-usd-per-task`, and timeouts are enforced,
    - `risky-actions` trigger the configured approval hook,
    - every run emits a trace in the standard schema (§10), so production traces can feed
@@ -336,19 +511,20 @@ Enforcement happens at three points:
 Enforcement modes: `strict` (fail), `warn` (log + continue), `off`. Configured in the manifest,
 overridable per command.
 
-### 5.6 Updating
+### 5.7 Updating
 
 ```bash
-agent-lock update llm.executor            # re-resolve one component, keep the rest pinned
-agent-lock update harness --to 1.5.0      # try a specific new version
-agent-lock update --all                   # full re-resolve
-agent-lock diff                           # component + evidence diff vs. the committed lock
+al update llm.executor                    # re-resolve one component, keep the rest pinned
+al update harness --to 1.5.0              # try a specific new version
+al update skill:pytorch-debugging         # pull the skill's new revision, re-check dependents
+al update --all                           # full re-resolve
+al diff                                   # component + evidence diff vs. the committed lock
 ```
 
 `update` reuses cached trials for unchanged stacks (thanks to Flyte caching, §8.3), so a
 partial update only pays for new trials. `diff` renders both a structural diff and an
 **evidence diff** ("success-rate 0.87 → 0.89 (+0.02, CI overlaps); cost −31%"), suitable for
-pasting into a PR description. `agent-lock diff --format md` produces exactly that.
+pasting into a PR description. `al diff --format md` produces exactly that.
 
 ---
 
@@ -387,9 +563,49 @@ tool-timeout-seconds = [30, 120]
 memory = ["none", "session", "project"]
 sandbox = [true]                         # fixed: not a search axis
 
+# ---- Dependencies: portable peripherals (installed into whichever harness wins) ----
 [tools]
 python = {}
 github = { mcp = "npm:@modelcontextprotocol/server-github", permissions = ["read:repo", "write:pull_request"] }
+
+[skills]                                 # see §7.7 for all source types
+pdf = { registry = "skills.sh", id = "anthropics/skills/pdf" }                        # OSS, via a registry
+gh-actions = { git = "https://github.com/openai/skills", path = "skills/.curated/gh-fix-ci", rev = "main" }
+pytorch-debugging = { git = "ssh://git@github.com/acme/agent-skills", path = "skills/pytorch-debugging", tag = "v1.3.0" }
+flyte-sdk = { path = "./skills/flyte-sdk", editable = true }                         # first-party, in-repo
+internal-sql = { oci = "ghcr.io/acme/skills/internal-sql:2" }                          # first-party, org registry
+
+[skills.builtin]                         # harness-shipped skills must be explicitly on or off
+codex-cli = { enable = ["openai-docs"], disable = ["skill-creator", "plugin-creator"] }
+
+[skills.trust]
+allow-sources = ["github.com/anthropics/*", "github.com/openai/skills", "github.com/acme/*", "path:./skills"]
+require = ["pinned-commit", "license", "scan-pass"]
+max-allowed-tools = "policy"             # a skill can't pre-approve tools beyond [policy]
+
+[instructions]
+files = ["AGENTS.md"]
+
+[context]
+isolation = "locked-only"
+
+# Peripherals can also be search axes
+[candidates.skills]
+optional = ["pdf", "gh-actions"]         # tuner may try with and without
+variants = { flyte-sdk = ["./skills/flyte-sdk", "./skills/flyte-sdk-terse"] }   # A/B two versions of a skill
+[candidates.instructions]
+any-of = [["AGENTS.md"], ["AGENTS.md", "docs/agent-style.md"]]
+[candidates.mcp]
+optional = ["github"]
+
+# ---- Dependencies: harness-native peripherals (only apply when that harness is chosen) ----
+[candidates.harness.opencode]
+version = ">=1.4,<2"
+plugins = ["npm:opencode-safe-git@^0.4"]
+lsp = { pyright = "npm:pyright@^1.1" }
+
+[candidates.harness.pi]
+packages = ["npm:@acme/pi-mleng-pack@^1"]  # bundle: extensions + skills + prompt templates
 
 # ---- What "best" means ----
 [objective]
@@ -418,6 +634,23 @@ Candidate syntax:
 - `langgraph:path/to/graph.py` and similar for harnesses that need user code.
 - Any component accepts a constraint table instead of a list:
   `[candidates.harness.opencode] version = ">=1.4,<2"`.
+- Peripheral sources: `npm:`, `pypi:`, `git = …` + `rev`/`path`, `hub = …` (skill registries),
+  `path = …` (local), `url = …` (remote MCP / A2A). Ranges and moving refs (`main`) are fine
+  in the manifest. The lock always resolves them to an exact version or commit plus a digest.
+- `optional = [...]` makes a peripheral an include/exclude search axis; `any-of` picks
+  among variants.
+- `[candidates.harness.<name>.<kind>]` declares harness-native components. Each adapter
+  documents its kinds (§7.6).
+
+Peripherals can also be added from the CLI, which edits the manifest and re-locks only the
+affected component:
+
+```bash
+al add skill git+https://github.com/acme/agent-skills#path=skills/pytorch-debugging
+al add mcp npm:@modelcontextprotocol/server-github --permissions read:repo
+al add pydantic-ai.capability pydantic_ai_harness.Planning
+al remove skill pdf
+```
 
 ---
 
@@ -459,7 +692,7 @@ correctness, tool errors, recoveries, human interventions, safety violations. Ag
 come with bootstrap CIs, plus **determinism** (outcome and trajectory variance across seeds)
 and **replayability** (whether the trial reproduces from its recorded trace, §10.3).
 
-**Bootstrapping a pack.** `agent-lock tasks new --from-traces <dir>` turns existing
+**Bootstrapping a pack.** `al tasks new --from-traces <dir>` turns existing
 production traces (in the trace schema, or imported from OTel/LangSmith/etc.) into
 draft tasks with draft graders for a human to review. Domain coverage is the biggest
 adoption barrier, so this path matters.
@@ -522,6 +755,9 @@ hooks it supports (§7.4); the tuner only proposes decision models for supported
 class HarnessAdapter(Protocol):
     name: str
     supported_decisions: set[Decision]
+    portable_kinds: dict[str, InstallTarget]   # e.g. {"skill": ".opencode/skills/", "mcp": "opencode.json#mcp"}
+    native_kinds: list[ComponentKind]          # e.g. [OpencodePlugin, OpencodeLsp, OpencodeAgentMode] (§7.6)
+    config_roots: list[ConfigRoot]             # user/project dirs to isolate or scan for undeclared peripherals
 
     def resolve(self, spec: HarnessSpec) -> ResolvedHarness:
         """Pin version/source/integrity. Called at lock time."""
@@ -534,7 +770,7 @@ class HarnessAdapter(Protocol):
         """Execute one task. Emit trace events through `recorder`."""
 
     def check(self, locked: LockedHarness, env: Environment) -> list[Violation]:
-        """Static verification for `agent-lock check`."""
+        """Static verification for `al check`."""
 ```
 
 How adapters capture traces and enforce the lock:
@@ -548,9 +784,9 @@ How adapters capture traces and enforce the lock:
   Claude Agent SDK).** Instrumentation via the framework's callback/hook APIs plus the proxy
   for model calls.
 
-v0 adapters: `reference`, `opencode`, `pi`, `claude-agent-sdk`, `langgraph`.
-v1 adds: `codex-cli`, `pydantic-ai`, `openai-agents`, `hermes`, `crewai`, `custom` (any
-command that reads a config and talks to a configurable model endpoint).
+v0 adapters: `reference`, `opencode`, `pi`, `claude-agent-sdk`, `pydantic-ai`, `langgraph`.
+v1 adds: `codex-cli`, `openai-agents`, `hermes`, `crewai`, `custom` (any command that
+reads a config and talks to a configurable model endpoint).
 
 The proxy is effectively a small local LLM gateway (routing, metering, policy). That was
 considered as a standalone product (Appendix A); here it is an internal component.
@@ -560,6 +796,264 @@ considered as a standalone product (Appendix A); here it is an internal componen
 Trials run in a sandbox: `subprocess` (local, least isolation, opt-in), `docker` (default
 when Docker is available), or the cluster's container runtime. The sandbox image is pinned
 by digest in the lock. Network policy: `none`, `egress-allowlist`, `open`.
+
+### 7.6 Extensible component kinds (Pydantic AI capabilities and friends)
+
+Harnesses keep inventing new units of extension: Pydantic AI *capabilities*, OpenCode
+plugins and agent modes, Pi packages and extensions, Claude Code plugins and output styles,
+Codex profiles. agent-lock can't hard-code all of them, so **component kinds are a plugin
+point**. Each kind is a small class registered by an adapter, or by a third-party package
+through the `agent_lock.component_kinds` entry point:
+
+```python
+class ComponentKind(Protocol):
+    name: str                                  # "pydantic-ai.capability"
+    harness: str | None                        # "pydantic-ai"; None for portable kinds
+    entry: type[BaseModel]                     # schema of a manifest/lock entry for this kind
+    strategy: PinStrategy                      # artifact | version+integrity | snapshot | endpoint+fingerprint | literal
+    stands_in_for: tuple[str, ...] = ()        # core kinds it can provide, e.g. ("tool", "hook", "instructions")
+
+    def resolve(self, spec: BaseModel, ctx: ResolveContext) -> Resolved:
+        """Pin version/revision and digest. Expand bundles into `provides`. Add `requires` edges."""
+
+    def search_axes(self, spec: BaseModel) -> list[Axis]:
+        """Optional: which fields the tuner may vary (include/exclude, args, variants)."""
+
+    def materialize(self, resolved: Resolved, cfg: HarnessConfig) -> None:
+        """Write this component into the harness's config or code."""
+
+    def check(self, locked: Resolved, env: Environment) -> list[Violation]:
+        """Static verification for `al check`."""
+
+    def guard(self) -> RuntimeGuard | None:
+        """Optional runtime enforcement hook for `al run`."""
+```
+
+Because the lock schema is generic (`[[native]] kind = "…"`, §5.2) and each kind brings its
+own entry schema, adding a kind never changes the lockfile format.
+
+#### Worked example: Pydantic AI capabilities
+
+In Pydantic AI, a **capability** is a reusable, composable unit that bundles tools/toolsets,
+lifecycle hooks, instructions, model settings, and even model selection. You pass it via
+`Agent(..., capabilities=[...])`. Core `pydantic-ai` ships some built-ins (e.g. `Thinking`,
+`WebSearch`, `MCP`), and the separate `pydantic-ai-harness` package ships many more
+(file system, shell, sandboxes, `Planning`, `Subagents`, `Memory`, `Skills`, `Compaction`,
+`Guardrails`, `Tool Approval`, `Spend Limits`, `Durable Execution`, …). Capabilities can be
+deferred (`defer_loading=True` with an `id`) so the model loads them on demand. Agents can
+also be declared in YAML/JSON *agent specs* (`Agent.from_file` / `Agent.from_spec`), which
+list capabilities by name with arguments.
+
+The `pydantic-ai` adapter registers `pydantic-ai.capability`:
+
+- **Manifest.** Capabilities live under the harness and can be search axes:
+
+  ```toml
+  [candidates.harness.pydantic-ai]
+  version = ">=2,<3"
+  harness-lib = "pydantic-ai-harness>=0.6"
+
+  [[candidates.harness.pydantic-ai.capability]]
+  use = "Planning"                               # resolved against pydantic_ai / pydantic_ai_harness
+
+  [[candidates.harness.pydantic-ai.capability]]
+  use = "Thinking"
+  args.effort = ["medium", "high"]               # search axis over constructor args
+
+  [[candidates.harness.pydantic-ai.capability]]
+  use = "Memory"
+  optional = true                                # include/exclude axis
+  defer-loading = [false, true]                  # on-demand vs. always-loaded is an axis too
+
+  [[candidates.harness.pydantic-ai.capability]]
+  use = "acme_agents.capabilities:RepoSearch"    # user-defined capability (import path)
+  ```
+
+- **Lock.** Each capability is pinned by import path, the providing package's version and
+  wheel hash (or the source digest of the user module), a hash of its constructor args,
+  `id`, and `defer_loading`:
+
+  ```toml
+  [[native]]
+  kind = "pydantic-ai.capability"
+  name = "Thinking"
+  source = "pypi:pydantic-ai==2.3.1"
+  integrity = "sha256:…"
+  config = "sha256:…"                            # canonicalized args: { effort = "high" }
+  args = { effort = "high" }                     # small args are inlined for PR review
+  provides = ["llm:planner#params.thinking"]
+
+  [[native]]
+  kind = "pydantic-ai.capability"
+  name = "Skills"
+  source = "pypi:pydantic-ai-harness==0.6.1"
+  integrity = "sha256:…"
+  requires = ["skill:pytorch-debugging", "skill:flyte-sdk"]   # reuse the portable skill components
+  ```
+
+- **Interop with portable kinds.** Capabilities that wrap a portable peripheral (`MCP`,
+  `Skills`) declare `requires` edges to the core `mcp` / `skill` components, so a skill is
+  pinned once and shared whether the winning harness is Pydantic AI or OpenCode.
+  Capabilities that provide tools or hooks list them in `provides`, so the runtime guard's
+  tool allowlist and the trace schema see them like any other tool.
+- **Materialization.** The adapter renders a Pydantic AI agent spec from the lock and loads
+  it with `Agent.from_file`, so the locked agent is a real, inspectable Pydantic AI
+  artifact. `export --format pydantic-ai` emits that spec. User-defined capabilities that a
+  spec can't express are passed as keyword arguments to `Agent.from_spec`.
+- **Enforcement.** `check` verifies package versions and hashes and the source digests of
+  user capability modules. The guard rejects capabilities loaded at runtime that aren't in
+  the lock, which includes self-extension capabilities such as capability creation unless
+  they're explicitly allowed.
+
+#### Other native kinds at launch
+
+| Adapter | Native kinds |
+|---|---|
+| `opencode` | `opencode.plugin`, `opencode.agent` (modes like build/plan), `opencode.command`, `opencode.lsp`, `opencode.formatter` |
+| `pi` | `pi.package` (bundle), `pi.extension`, `pi.prompt-template`, `pi.theme` (record-only) |
+| `claude-agent-sdk` | `claude.plugin` (bundle), `claude.hook`, `claude.output-style`, `claude.command`, `claude.setting-sources` |
+| `codex-cli` | `codex.profile`, `codex.approval-mode`, `codex.sandbox-mode` |
+| `langgraph` | `langgraph.graph` (graph module digest), `langgraph.checkpointer` |
+
+All of them also use the portable kinds (`tool`, `mcp`, `skill`, `instructions`, `subagent`)
+where the harness supports them.
+
+### 7.7 Skills
+
+Skills get their own section because they're the fastest-growing kind of agent dependency.
+They're also the one most likely to be copied around informally and to drift. An Agent
+Skill is a directory with a `SKILL.md` (YAML frontmatter with a required `name` and
+`description`, plus optional `license`, `compatibility`, `metadata`, and experimental
+`allowed-tools`) and optional `scripts/`, `references/`, and `assets/`. Harnesses load skills
+progressively: every skill's name and description at startup, the body on activation, and
+resources on demand. The format is an open standard (agentskills.io) read by Claude, Codex,
+OpenCode, Pi, VS Code, Cursor, Gemini CLI, Goose, and others, so it's agent-lock's main
+**portable** peripheral.
+
+#### 7.7.1 Where skills come from
+
+| Origin | Examples | Typical source | What the lock pins |
+|---|---|---|---|
+| **OSS vendor catalogs** | `anthropics/skills`; `openai/skills` (`.system`, `.curated`, and experimental tiers); `google/skills`; SDK vendors shipping skills for their own frameworks (e.g. Flyte) | public git | commit + tree digest |
+| **Community registries and indexes** | `skills.sh` (`npx skills add …`), other skill directories, GitHub topic repos. A July 2026 crawl counted ~57k skills across ~1.1k repos | registry ID → git | the registry ID for provenance, but the **git commit + digest** is what's pinned; registries are discovery, not trust |
+| **Plugin / package bundles** | Claude Code and Codex plugins (marketplaces), Pi packages, OpenCode plugins | npm / git / marketplace | bundle version + integrity, and each contained skill's digest (`origin = "bundled"`) |
+| **Harness built-ins** | Codex `.system` skills (skill-installer, skill-creator, …); skills baked into a harness release | the harness itself | harness version + each built-in's digest + explicit enabled/disabled |
+| **First-party, in-repo** | `./skills/…`, `.agents/skills/`, `.claude/skills/` committed with the project | `path:` | tree digest; optionally `editable` |
+| **First-party, org-shared** | private monorepo of company skills, internal registry, OCI artifacts | `git+ssh`, `oci://`, private registry | commit/tag or image digest + tree digest + optional signature |
+| **Personal (user-level)** | `~/.claude/skills`, `~/.agents/skills`, `~/.codex/skills` | user's machine | nothing: excluded by `isolation = "locked-only"`. `al skills import --from-user` copies chosen ones into the manifest as first-party skills |
+| **Generated** | skills written by `skill-creator`-style tools or proposed by the tuner (open question 9) | `store://` | digest + the run that produced it |
+
+#### 7.7.2 Source syntax
+
+```toml
+[skills]
+a = { registry = "skills.sh", id = "owner/repo/skill" }        # resolved to git + commit
+b = { git = "https://github.com/owner/repo", path = "skills/b", rev = "main" | tag = "v1" | commit = "…" }
+c = { gh = "owner/repo/skills/c" }                              # shorthand for public GitHub
+d = { path = "./skills/d", editable = true }
+e = { oci = "ghcr.io/acme/skills/e:2" }
+f = { plugin = "claude:acme-marketplace/acme-tools", skill = "f" }  # one skill out of a bundle
+g = { as = "pdf-acme", git = "…", path = "skills/pdf" }          # alias on name collision
+```
+
+Ranges and moving refs are allowed in the manifest. The lock always pins a commit (or image
+digest) plus a **tree digest**: a Merkle hash over normalized paths, contents, and executable
+bits, excluding VCS metadata. That makes a vendored copy and a git checkout of the same
+skill hash identically, so `check` can verify either one.
+
+#### 7.7.3 What the lock records per skill
+
+On top of the common envelope (§5.3), a `[[skill]]` entry carries:
+
+- `origin`: `third-party` | `first-party` | `bundled` | `harness-builtin` | `generated`.
+- `registry`: where it was discovered, if anywhere (provenance only).
+- `frontmatter`: hash of the parsed frontmatter, with `license`, `compatibility`, and
+  `allowed-tools` inlined for review. `al lock` validates frontmatter against the spec (the
+  same rules as the `skills-ref validate` reference validator): name format, the name matching
+  its directory, and length limits.
+- `allowed-tools`: inlined and checked against `[policy]`. A skill can never widen what the
+  stack's policy allows.
+- `executes` and `runtime-deps`: scripts the skill can run and their dependencies, which are
+  pinned and baked into the sandbox image so a skill's script runs the same everywhere.
+- `scan`: result of the skill security scan (below).
+- `signature`: optional publisher signature, e.g. Sigstore keyless with the release
+  workflow's identity. `[skills.trust]` can require it for given sources.
+- `editable` and `evidence-digest`: first-party development mode (below).
+- `provided-by`: for bundled and harness-built-in skills, the bundle or harness that
+  supplies them.
+
+#### 7.7.4 First-party skills: the development loop
+
+Teams iterate on their own skills constantly, so a strict "any edit fails `check`" rule would
+be miserable. First-party `path:` skills can be marked `editable = true`, like `pip install -e`:
+
+- `al check` passes but reports **stale evidence** when the skill's current digest differs
+  from `evidence-digest`. With `--strict` (for release branches), it fails.
+- `al lock --refresh skill:flyte-sdk` re-measures only the trials affected by that skill.
+  Thanks to trial caching (§8.3), everything else is reused.
+- `al diff` shows the skill's content diff next to the evidence diff, so a PR that edits a
+  skill shows whether it helped.
+- Non-editable first-party skills (e.g. released from an org repo by tag) behave like
+  third-party ones.
+
+#### 7.7.5 Harness built-ins and bundles
+
+Harness-shipped skills are the easiest to miss. They change when the harness is upgraded,
+and nobody declared them. At lock time the adapter enumerates every built-in skill the
+pinned harness version ships, records each one's digest, and requires the manifest to
+enable or disable it (`[skills.builtin]`; the default is *disabled*, so behavior never
+depends on something undeclared). Skills inside plugins or packages are expanded and locked
+individually (`origin = "bundled"`), so a plugin update that quietly changes one skill shows
+up in `al diff`.
+
+#### 7.7.6 Interop with existing skill tooling
+
+- **`npx skills` (skills.sh CLI).** It already writes a project `skills-lock.json` and a
+  user-level `~/.agents/.skill-lock.json`. `al skills import skills-lock.json` turns an
+  existing setup into manifest entries. `al sync` can also write a compatible
+  `skills-lock.json`, so teammates using `npx skills` see the same set. `agent.lock` stays
+  the source of truth because it also carries digests, trust, and evidence.
+- **Harness installers** (Codex's `$skill-installer`, Claude plugin marketplaces). Skills
+  installed this way land in config roots that `check` scans, and they're reported as
+  undeclared until added with `al add skill` or `al skills adopt`.
+- **Install targets.** Each adapter maps the portable skill onto its harness's directory
+  convention (`.claude/skills/`, `.opencode/…`, `.agents/skills/`, `.codex/skills/`, …). The
+  same locked skill installs into any harness the tuner picks.
+
+#### 7.7.7 Skills in tuning and traces
+
+- **Activation is traced.** Adapters emit `skill.load` (metadata), `skill.activate` (body
+  read), and `skill.resource` (script run or reference read) events (§10.1). Evidence
+  therefore shows which skills were actually used, and `al skills unused` lists skills that
+  never activated on the holdout split, which are candidates for removal.
+- **Skill count is a cost.** Every installed skill spends startup context on its metadata
+  and competes for selection. The lock records total metadata tokens, and `optional` skills
+  let the tuner find the smallest set that keeps quality.
+- **Variants.** `variants` A/B-tests two versions of a skill (a new upstream commit vs. the
+  pinned one, or a terse vs. verbose rewrite) against the task pack.
+
+#### 7.7.8 Skill supply-chain security
+
+Skills are instructions *and* executable code, from an ecosystem of tens of thousands of
+mostly unreviewed repos. Published research has already documented malicious skills in
+public registries, and cross-skill composition attacks that evade per-skill scanners.
+agent-lock therefore:
+
+- pins by commit + tree digest, never by name alone, and treats registries as discovery
+  rather than trust;
+- scans every skill at lock time (instructions for injection patterns, scripts for
+  network, credential, and filesystem access, and `allowed-tools` breadth) and records the
+  result;
+- **scans the locked skill set together**, not just each skill, because composition is where
+  per-skill scanners fail;
+- enforces `[skills.trust]` (allowed sources, required license, pinned commits, scan pass,
+  signatures);
+- runs skill scripts only inside the sandbox, under the stack's `[policy]`;
+- includes safety graders in official task packs that try to trigger skill-borne injection,
+  so a stack whose skills make it unsafe can't win.
+
+The scanner is pluggable (`al skills scan --scanner …`). The built-in one is a baseline, not
+a guarantee.
 
 ---
 
@@ -578,7 +1072,7 @@ services for local mode.
 
 | | `local` | `devbox` | `cluster` (Flyte or Union) |
 |---|---|---|---|
-| Setup | none | Docker; `agent-lock backend up` wraps `flyte start devbox` | existing cluster + `flyte create config` / config file |
+| Setup | none | Docker; `al backend up` wraps `flyte start devbox` | existing cluster + `flyte create config` / config file |
 | Where trials run | this Python process (async, bounded concurrency) | containers on the local Flyte devbox | pods on the cluster |
 | Durability | local SQLite cache; resume after crash re-uses cached trials | durable run state, object store, survives restarts | durable, shared across users |
 | Observability | terminal UI (`--tui`), local reports, `.agentlock/runs/` | Flyte UI at localhost | Flyte/Union UI, shared |
@@ -590,10 +1084,10 @@ services for local mode.
 Switching:
 
 ```bash
-agent-lock lock                          # local (default)
-agent-lock backend up                    # starts a devbox (flyte start devbox) and writes config
-agent-lock lock --backend devbox
-agent-lock lock --backend cluster        # uses ~/.flyte/config.yaml or [backend] in manifest
+al lock                                  # local (default)
+al backend up                            # starts a devbox (flyte start devbox) and writes config
+al lock --backend devbox
+al lock --backend cluster                # uses ~/.flyte/config.yaml or [backend] in manifest
 ```
 
 Under the hood, `--backend local` maps to Flyte local run mode; `devbox` and `cluster` call
@@ -675,24 +1169,32 @@ Layer 3  Flyte-native (agent_lock.flyte)  "I'm composing this into my own Flyte 
 
 ### 9.1 Layer 0: CLI
 
+The package is `agent-lock`, and its command is **`al`**, matching the Python import
+convention `import agent_lock as al`. A long-form `agent-lock` alias is installed too, for
+scripts and for environments where `al` is already taken.
+
 ```bash
 pip install agent-lock
-agent-lock init                       # interactive: pick a pack, providers, harness → agentlock.toml
-agent-lock lock                       # tune → agent.lock (+ .agentlock/report.html)
-agent-lock show                       # pretty-print the lock + evidence
-agent-lock sync                       # install/pin harness, MCP servers, sandbox image, adapters
-agent-lock run "fix the failing test in ./repo"     # run the locked agent with runtime guard
-agent-lock check                      # static lock verification (CI)
-agent-lock verify                     # canary + fingerprint re-check (scheduled CI)
-agent-lock update <component>|--all   # partial/full re-resolve
-agent-lock diff [--format md]         # structural + evidence diff vs. committed lock
-agent-lock export --format docker|flyte|langgraph   # emit a deployable bundle for the locked stack
-agent-lock leaderboard [--pack <name>]              # ranked stacks from the last search (Pareto front)
-agent-lock tasks new|validate|pull|push
-agent-lock traces ls|show|export      # browse traces; export as HF dataset
-agent-lock traces replay <trial>      # re-run a trial from its recorded trace (§10.3)
-agent-lock traces explain <trial>     # failure triage via agent-lock/triage (§11)
-agent-lock backend up|down|status     # devbox lifecycle (wraps flyte start/stop/get devbox)
+al init                               # interactive: pick a pack, providers, harness → agentlock.toml
+al lock                               # tune → agent.lock (+ .agentlock/report.html)
+al show                               # pretty-print the lock + evidence
+al tree                               # component dependency graph (models, harness, skills, MCP, capabilities, …)
+al add|remove <kind> <src>            # add/remove a peripheral (skill, mcp, tool, native kind) and re-lock it
+al sync                               # install/pin harness, peripherals, sandbox image, adapters
+al run "fix the failing test in ./repo"             # run the locked agent with runtime guard
+al check                              # static lock verification (CI)
+al verify                             # canary + fingerprint re-check (scheduled CI)
+al update <component>|--all           # partial/full re-resolve
+al diff [--format md]                 # structural + evidence diff vs. committed lock
+al export --format docker|flyte|langgraph           # emit a deployable bundle for the locked stack
+al leaderboard [--pack <name>]                      # ranked stacks from the last search (Pareto front)
+al outdated                           # locked peripherals (skills, MCP, plugins, harness) with newer upstream versions
+al skills import|adopt|scan|unused    # import skills-lock.json or user skills, adopt undeclared, scan, find unused
+al tasks new|validate|pull|push
+al traces ls|show|export              # browse traces; export as HF dataset
+al traces replay <trial>              # re-run a trial from its recorded trace (§10.3)
+al traces explain <trial>             # failure triage via agent-lock/triage (§11)
+al backend up|down|status             # devbox lifecycle (wraps flyte start/stop/get devbox)
 ```
 
 `export` turns the lock into something deployable outside agent-lock, so the result is
@@ -758,6 +1260,9 @@ class MyStrategy(al.Strategy):
 
 @al.adapter("my-harness")
 class MyHarness(al.HarnessAdapter): ...
+
+@al.component_kind("my-harness.middleware")       # new lockable peripheral kind (§7.6)
+class Middleware(al.ComponentKind): ...
 ```
 
 **Profiles** describe compute and durability in agent-lock terms, mapped to Flyte by the
@@ -848,6 +1353,7 @@ can be exported to any OTel backend and imported from OTel-instrumented agents.
       "choice": "modify_and_retry", "confidence": 0.81 },
     { "type": "tool.call", "tool": "python", "input_ref": "sha256:…", "output_ref": "sha256:…",
       "status": "error", "error_class": "ModuleNotFoundError", "latency_ms": 840 },
+    { "type": "skill.activate", "skill": "pytorch-debugging", "digest": "sha256:7c10…" },
     { "type": "approval", "action": "filesystem.write:/etc/hosts", "outcome": "denied", "by": "simulated" }
   ],
   "result": { "artifacts": ["patch.diff"], "final_ref": "sha256:…" },
@@ -857,7 +1363,7 @@ can be exported to any OTel backend and imported from OTel-instrumented agents.
 ```
 
 Payloads are content-addressed and stored separately so traces stay small and shareable,
-and payloads can be redacted without breaking structure (`agent-lock traces export --redact`).
+and payloads can be redacted without breaking structure (`al traces export --redact`).
 
 The trace layer is designed to stand on its own ("OpenTelemetry for agent traces"): the
 schema, recorder, and replay are usable without the tuner, so teams can adopt tracing first
@@ -871,7 +1377,7 @@ and tuning later.
   step that worked in a sibling trial.
 - `agent-lock/tasks-*`: the official task packs (holdout splits withheld).
 
-Users opt in to contributing traces (`agent-lock traces push --public`) with a mandatory
+Users opt in to contributing traces (`al traces push --public`) with a mandatory
 redaction pass. Nothing is uploaded by default.
 
 The trace corpus is likely the most defensible long-term asset: it trains §11's models and
@@ -879,7 +1385,7 @@ seeds new task packs.
 
 ### 10.3 Replay
 
-`agent-lock traces replay <trial>` re-executes a trial using its recorded trace:
+`al traces replay <trial>` re-executes a trial using its recorded trace:
 
 - `--mode exact` serves every model and tool response from the trace. This checks
   harness/adapter determinism and is free.
@@ -901,13 +1407,13 @@ Small, narrow, permissively licensed (Apache-2.0), released on Hugging Face unde
 |---|---|---|---|
 | `agent-lock/decider` | ~0.5B and ~1.5B | Structured decisions: route / retry / escalate / stop / tool | `[decision]` in locks; base for per-project LoRA tuning |
 | `agent-lock/judge` | ~7–8B | Rubric grading of trajectories and artifacts, calibrated to human labels | `judge:` graders (default) |
-| `agent-lock/triage` | ~1.5B | Classify a failed trace: model vs. harness vs. tool vs. task-spec failure; suggest the fix | `agent-lock traces explain`, tuner analysis |
+| `agent-lock/triage` | ~1.5B | Classify a failed trace: model vs. harness vs. tool vs. task-spec failure; suggest the fix | `al traces explain`, tuner analysis |
 
 Design requirements:
 
 - Each runs on CPU (decider) or one consumer GPU (judge), so `local` mode can use them.
 - Each ships with a model card, eval results on held-out packs, and the exact training
-  recipe as an agent-lock/Flyte pipeline (`agent-lock train decider …`), so anyone can
+  recipe as an agent-lock/Flyte pipeline (`al train decider …`), so anyone can
   reproduce or retrain on their own traces.
 - The judge is calibrated against human-labeled grades. Calibration error is reported, and
   the lock records which judge produced the evidence.
@@ -929,8 +1435,16 @@ assistant" is neither defensible nor useful here.
   `subprocess` sandboxing requires explicit opt-in.
 - **Tool permissions** in the lock are least-privilege by default: the tuner only grants
   permissions the manifest lists, and the runtime guard enforces them.
-- **Supply chain.** Harnesses and MCP servers are pinned by version and integrity hash;
-  sandbox images by digest; models by weights digest. `check` fails on mismatch.
+- **Supply chain.** Harnesses, MCP servers, plugins, and packages are pinned by version and
+  integrity hash; skills by directory digest; sandbox images by digest; models by weights
+  digest. `check` fails on mismatch.
+- **Skills and plugins are code.** Skills can ship scripts, and plugins, hooks, and
+  extensions run arbitrary code inside the harness. `lock` and `add` show what a new
+  peripheral can execute (scripts, hook commands, requested permissions). Such peripherals
+  only run inside the sandbox, and undeclared ones are refused under `isolation = "locked-only"`.
+- **Remote peripherals** (remote MCP servers, A2A agents, provider-native tools) can't be
+  pinned by bytes. Their advertised schemas are fingerprinted, OAuth scopes are locked, and
+  any change in what they advertise is a `verify` failure.
 - **Trace hygiene.** Redaction hooks run before any export. Public trace contributions
   require a redaction pass and a license acknowledgment.
 - **Safety graders.** Every official pack includes trace graders for exfiltration,
@@ -951,7 +1465,10 @@ agent_lock/
   tasks/                 # task packs, graders, splits, Hub client
   providers/             # LLM providers, alias resolution, pricing, fingerprints, serving
   decision/              # rules, llm, model decision backends; training recipes
-  adapters/              # harness adapters: reference, opencode, pi, claude_agent_sdk, langgraph, …
+  components/            # component model: ComponentKind registry, pin strategies, graph, portable kinds
+                         #   (tool, mcp, skill, instructions, subagent, hook, memory, retrieval, …)
+  adapters/              # harness adapters + their native kinds: reference, opencode, pi,
+                         #   claude_agent_sdk, pydantic_ai, langgraph, …
   proxy/                 # model proxy + MCP proxy (tracing, enforcement, metering)
   sandbox/               # subprocess, docker, cluster runtimes
   traces/                # schema, recorder, OTel import/export, redaction
@@ -975,6 +1492,10 @@ Install extras: `agent-lock[vllm]`, `agent-lock[train]`, `agent-lock[docker]`,
 **v0.1: "first lock in 10 minutes"** (local only)
 - `init`, `lock`, `show`, `check`, `run` · `agent.lock` schema v1
 - Adapters: `reference`, `opencode`, `claude-agent-sdk`
+- Component model with portable kinds `tool`, `mcp` (local), `skill`, `instructions`;
+  context isolation; `tree`, `add`, `remove`
+- Skills: git, path (editable), and registry sources; tree digests; frontmatter validation;
+  harness built-in enumeration; `skills import` from `skills-lock.json`; baseline scanner
 - API providers only; grid/random/successive-halving; tests + judge graders (judge = any LLM)
 - One official pack: `research-analyst`
 - Flyte local execution with trial caching and resume
@@ -982,12 +1503,16 @@ Install extras: `agent-lock[vllm]`, `agent-lock[train]`, `agent-lock[docker]`,
 **v0.2: "durable and updateable"**
 - `devbox` backend, `backend up/down`, Flyte UI links in output
 - `update`, `diff --format md`, `verify` with fingerprints
-- Adapters: `pi`, `langgraph` · packs: `data-cleaning`, `ml-engineering`
+- Adapters: `pi`, `pydantic-ai` (with `pydantic-ai.capability`), `langgraph` · packs:
+  `data-cleaning`, `ml-engineering`
+- Portable kinds `subagent`, `hook`, `command`, remote `mcp` · native kinds for each v0 adapter
+  · peripherals as search axes (`optional`, `any-of`, capability args)
 - Docker sandbox default · trace export to OTel and HF
 
 **v0.3: "decision models"**
 - `agent-lock/decider` + `agent-lock/judge` released · decision-model tuning stage
-- Layer 2 extension points stable · profiles
+- Layer 2 extension points stable, including the public `ComponentKind` entry point · profiles
+- Portable kinds `memory`, `retrieval`, `guardrail`, `browser`
 - `tasks new --from-traces`
 
 **v0.4: "scale"**
@@ -1016,13 +1541,13 @@ Install extras: `agent-lock[vllm]`, `agent-lock[train]`, `agent-lock[docker]`,
 1. Start from 20–50 domain tasks (an official pack, or `tasks new --from-traces`).
 2. agent-lock tries stacks such as frontier LLM + LangGraph, Claude + OpenCode, Qwen +
    custom workflow, small decider + big-model fallback, and local model on a cluster backend.
-3. `agent-lock leaderboard` shows the Pareto front.
+3. `al leaderboard` shows the Pareto front.
 4. The findings are the story. Illustrative examples of what we expect to show:
    - the frontier-only stack is best but expensive,
    - an open model + decision model gets ~90% of the quality at a fraction of the cost,
    - OpenCode beats generic tool-calling on code-edit tasks,
    - a deterministic workflow beats an agent loop for repeatable data prep.
-5. `agent-lock lock` writes `agent.lock`. `export` ships it. The lock lands in a PR.
+5. `al lock` writes `agent.lock`. `export` ships it. The lock lands in a PR.
 
 The illustrative numbers must be replaced with real, reproducible results before launch.
 
@@ -1065,7 +1590,7 @@ Flyte/Union cluster backend docs.
    Flyte workflows, so steps that don't need to be agentic stop being agentic, and
    generate a workflow from a task plan. That's a strong differentiator (and a natural use
    of the triage model and trace corpus) but a large scope. Treat it as a post-v1
-   `agent-lock compile` command, with the compiled workflow becoming a lockable
+   `al compile` command, with the compiled workflow becoming a lockable
    `harness = "workflow:…"` candidate?
 5. **Closed-model drift policy.** When a provider retires a pinned model ID, should
    `verify` auto-propose an `update`, or only fail?
@@ -1075,6 +1600,20 @@ Flyte/Union cluster backend docs.
    a leaderboard per pack?
 8. **Harness licensing.** Some harnesses have restrictive terms for automated or benchmark
    use. We need a per-adapter compliance note before publishing leaderboards.
+9. **Tuning peripheral contents.** Beyond include/exclude, should the tuner *edit* skills and
+   instruction files (prompt-optimization style) and lock the improved versions as new
+   digests? That's powerful, but it means agent-lock authors content, not just selects it.
+10. **Skill registries and publisher trust.** Registries (skills.sh and others) are treated
+    as discovery only, and pins are always git commits or OCI digests (§7.7). Should
+    agent-lock ship a default `[skills.trust]` allowlist of vendor catalogs? Should it push
+    for signed skill releases (Sigstore) as an ecosystem norm, and contribute a digest/signature
+    field upstream to the Agent Skills spec?
+11. **Isolation default.** `locked-only` isolation is the correct default for reproducibility
+    but will surprise people who rely on personal `~/.claude` / `~/.config/opencode` setups.
+    Should `al init` offer to import those into the manifest?
+12. **Capability drift in fast-moving libraries.** `pydantic-ai-harness` is on 0.x
+    versioning with frequent API changes. Should native kinds declare a supported version
+    window that the resolver enforces?
 
 ---
 
@@ -1110,3 +1649,23 @@ could try, not just Union customers.
 | Local LLM gateway proxy | installable system | Crowded market; folded in as an internal component (§7.4 proxy) |
 | Fine-tuned workflow-repair model | model + dataset | Best as a companion artifact; became `agent-lock/triage` (§11) |
 | Standalone research-agent app | app/harness | Good demo but less differentiated; became an example agent + the first task pack |
+
+## Appendix B. References for the peripheral and skills survey (§5.4, §7.6, §7.7)
+
+- Pydantic AI capabilities: https://pydantic.dev/docs/ai/capabilities/overview/
+- Pydantic AI agent specs (`Agent.from_file` / `from_spec`): https://pydantic.dev/docs/ai/core-concepts/agent-spec/
+- Pydantic AI Harness (capability library): https://pydantic.dev/docs/ai/harness/
+- On-demand capabilities: https://pydantic.dev/articles/pydantic-ai-capabilities
+- Agent Skills open standard: https://agentskills.io/ · specification: https://agentskills.io/specification
+- `anthropics/skills`: https://github.com/anthropics/skills
+- OpenAI skills catalog (system / curated / experimental): https://codex.danielvaughan.com/2026/05/14/openai-skills-catalogue-codex-cli-official-curated-experimental-skill-installer/
+- Google skills repo: https://pinggy.io/blog/google_official_agent_skills_repository/
+- skills.sh CLI lock files (`skills-lock.json`, `~/.agents/.skill-lock.json`): https://www.mintlify.com/vercel-labs/skills/advanced/lock-files
+- Skill ecosystem study (registry → repository, ~57k skills): https://arxiv.org/pdf/2607.00911
+- Skill-ecosystem security scanning: https://arxiv.org/pdf/2609.17274 · cross-skill composition evading scanners: https://arxiv.org/pdf/2608.09732
+- OpenCode config (agents, commands, plugins, LSP, formatters, permissions): https://opencode.ai/v2/docs/config/
+- Pi coding agent (extensions, skills, prompt templates, packages): https://app.unpkg.com/@mariozechner/pi-coding-agent@0.73.1/files/README.md
+- Claude Agent SDK filesystem features (settingSources, CLAUDE.md, skills, hooks, plugins): https://code.claude.com/docs/en/agent-sdk/claude-code-features
+- Claude Agent SDK system prompts and output styles: https://platform.claude.com/docs/en/agent-sdk/modifying-system-prompts
+- Codex CLI MCP / config.toml: https://codex.danielvaughan.com/2026/03/26/codex-cli-mcp-integration/
+- Cross-harness config comparison: https://notes.systemoverlord.com/Computers/AI/Agent-Configs
