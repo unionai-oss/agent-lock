@@ -28,18 +28,33 @@ The (superseded) reference pure-Python implementation is preserved under
                          ▼
                   al-core (Rust)          manifest · lockfile · store ·
                                            task packs · search · tuner
-                         │
-                         └── flyte backend (flyte-sdk-rs, optional feature)
+                         │  │
+         local (reference)│  └── devbox / cluster: Python worker
+                         ▼        (agent_lock.tasks.worker)
+                in-process                │  └── optional Flyte raise
+                                          ▼       (flyte plugins-rs)
+                                    real LLM · data · finetune
 ```
 
-- `crates/agent-lock-core` — the core library (pure Rust, no Python).
+- `crates/agent-lock-core` — the core library (pure Rust, no Python). It stays the
+  orchestrator + aggregator; it never does heavy compute itself.
 - `crates/agent-lock` — PyO3 extension (`agent_lock._agent_lock`) exposing the same user-facing
-  Python API as the reference implementation via the `al` package.
-- `al/` — the mixed Python package: re-exports the compiled `al._agent_lock` and the
-  `al` CLI.
-- `crates/agent-lock-core/src/flyte.rs` — provisional backend integration using
-  [flyte-sdk-rs](https://github.com/flyteorg/flyte-sdk-rs) behind the `flyte`
-  cargo feature.
+  Python API as the reference implementation via the `agent_lock` package.
+- `agent_lock/` — the mixed Python package: re-exports the compiled `agent_lock._agent_lock`,
+  the `al` CLI, and the heavy-work Python worker (`agent_lock/tasks/worker.py`).
+- `crates/agent-lock-core/src/worker.rs` — the Rust↔Python bridge: a `PythonAdapter`
+  (behind the `HarnessAdapter` trait) that shells trials out to the worker over a
+  versioned JSON contract. See [Backends](#backends).
+- `crates/agent-lock-core/src/flyte.rs` — provisional [flyte-sdk-rs](https://github.com/flyteorg/flyte-sdk-rs)
+  integration behind the `flyte` cargo feature (not yet validated).
+
+The **Rust vs Python split** for `al optimize`: pure/deterministic logic — manifests,
+lockfiles, search planning, trial bookkeeping, evidence aggregation, lock construction —
+lives in Rust. Ecosystem- and GPU-heavy work — real LLM calls, user-trace loading
+(pandas/polars), synthetic data, model grading, prompt search, LoRA fine-tuning — lives in
+the Python worker, which runs where the Python toolchain does (devbox / `flyte local` /
+cluster) and may itself raise each body to a real Flyte task. The Rust core only ever
+speaks the JSON contract, so it never depends on where the work ran.
 
 ## Install
 
@@ -99,11 +114,24 @@ print(agent.run("clean ./data/orders.csv"))
 
 ## Backends
 
-- `local` — in-process Rust async loop (default).
-- `devbox` / `cluster` — a [flyte-sdk-rs](https://github.com/flyteorg/flyte-sdk-rs)
-  backend (`cargo build --features flyte`) with a `flyteplugins-rs` Python
-  launcher registering the trial task against a Flyte / Union cluster
-  (`~/.flyte/config.yaml`). Provisional.
+- `local` — in-process Rust reference harness (default; deterministic, offline, CI-friendly).
+- `devbox` / `cluster` — the Rust core drives the **Python worker**
+  (`python -m agent_lock.tasks.worker`) over a versioned JSON contract. The worker runs
+  each heavy work item where the Python toolchain and GPUs live, and best-effort raises it
+  to a real Flyte task via the Python `flyte` / `flyteplugins-rs` packages
+  (`~/.flyte/config.yaml`). When the optional deps are absent it degrades gracefully
+  (deterministic LLM fallback, in-process Flyte lift, availability flags).
+
+Select the backend with `--backend local|devbox|cluster` (or `al lock --backend …`), which
+overrides the manifest's `[backend] target`. The interpreter the worker runs under is
+taken from `$AL_PYTHON` (default `python3`) — pin it to the interpreter that has
+`agent-lock` installed.
+
+```bash
+al optimize --backend devbox --depth probe --max-trials 10
+# real LLM calls: export AL_LLM_BASE_URL=http://… AL_LLM_MODEL=qwen-32b [AL_LLM_API_KEY=…]
+al optimize --backend cluster --depth ft --data user:./runs   # LoRA on a GPU worker
+```
 
 ## Development
 

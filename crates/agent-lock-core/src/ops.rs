@@ -219,6 +219,8 @@ pub struct OptimizeSpec {
     pub strict: bool,
     pub apply: bool,
     pub max_trials: Option<usize>,
+    /// local | devbox | cluster (overrides the manifest's `[backend] target`).
+    pub backend: Option<String>,
     pub workdir: PathBuf,
 }
 
@@ -232,6 +234,7 @@ impl Default for OptimizeSpec {
             strict: false,
             apply: false,
             max_trials: None,
+            backend: None,
             workdir: PathBuf::from(".agentlock"),
         }
     }
@@ -278,11 +281,14 @@ fn search_grid(manifest: &Manifest, depth: &str) -> Vec<(String, u32)> {
 /// `al optimize` -> `harness.opt.lock` (§5.9).
 pub fn optimize(manifest: Manifest, spec: &OptimizeSpec) -> Result<OptimizeOutcome> {
     let depth = spec.resolved_depth().to_string();
+    let backend = crate::worker::Backend::parse(
+        spec.backend.as_deref().unwrap_or(manifest.backend_target().as_str()),
+    );
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let base_lock = Lockfile::load(&cwd.join(LOCKFILE_PATH)).ok();
     let baseline_sr = base_lock.as_ref().map(baseline_sr).unwrap_or(0.0);
 
-    let mut tuner = Tuner::new(manifest.clone(), &spec.workdir);
+    let mut tuner = crate::tuner::Tuner::with_backend(manifest.clone(), &spec.workdir, backend);
     let search_tasks = tuner.load_packs();
     if search_tasks.is_empty() {
         return Err(Error::Tuning("no tasks loaded — cannot optimize".into()));
@@ -295,7 +301,7 @@ pub fn optimize(manifest: Manifest, spec: &OptimizeSpec) -> Result<OptimizeOutco
     let data_mode = if n_synthetic > 0 { "synthetic" } else { "user-traces" };
 
     // run the grid
-    let mut scored: Vec<(String, u32, f64, f64)> = Vec::new(); // (model,retries,success,cost)
+    let mut scored: Vec<(String, u32, f64, f64, usize)> = Vec::new(); // (model,retries,success,cost,trials)
     for (model, retries) in search_grid(&manifest, &depth) {
         let stack = Stack {
             llm: BTreeMap::from([("planner".to_string(), format!("reference:{model}"))]),
@@ -334,7 +340,7 @@ pub fn optimize(manifest: Manifest, spec: &OptimizeSpec) -> Result<OptimizeOutco
             }
         }
         if n > 0 {
-            scored.push((model, retries, ok as f64 / n as f64, cost / n as f64));
+            scored.push((model, retries, ok as f64 / n as f64, cost / n as f64, n as usize));
         }
     }
 
@@ -342,7 +348,7 @@ pub fn optimize(manifest: Manifest, spec: &OptimizeSpec) -> Result<OptimizeOutco
     let best = scored
         .iter()
         .max_by(|a, b| a.2.partial_cmp(&b.2).unwrap().then(b.3.partial_cmp(&a.3).unwrap()));
-    let Some((bm, br, bs, bc)) = best.cloned() else {
+    let Some((bm, br, bs, bc, bn_trials)) = best.cloned() else {
         return Err(Error::Tuning("optimize produced no candidate".into()));
     };
 
@@ -366,7 +372,19 @@ pub fn optimize(manifest: Manifest, spec: &OptimizeSpec) -> Result<OptimizeOutco
         retries: br,
         temperature: Some(0.2),
     };
-    let opt_lock = build_optimized_lock(&manifest, winner_stack, bs, bc, &base_lock, &data_mode, &spec.data, &depth, scored.len());
+    let opt_lock = build_optimized_lock(
+        &manifest,
+        winner_stack,
+        bs,
+        bc,
+        &base_lock,
+        &data_mode,
+        &spec.data,
+        &depth,
+        scored.len(),
+        bn_trials,
+        backend.as_str(),
+    );
 
     let out_path = &spec.out;
     if let Some(parent) = out_path.parent() {
@@ -382,8 +400,9 @@ pub fn optimize(manifest: Manifest, spec: &OptimizeSpec) -> Result<OptimizeOutco
         "depth": depth,
         "data": spec.data,
         "data_mode": data_mode,
+        "backend": backend.as_str(),
         "grid": scored.len(),
-        "best": {"model": bm, "retries": br, "success_rate": bs, "cost_usd": bc},
+        "best": {"model": bm, "retries": br, "success_rate": bs, "cost_usd": bc, "trials": bn_trials},
         "baseline_success_rate": baseline_sr,
         "gain_success_rate": bs - baseline_sr,
         "path": out_path.to_string_lossy(),
@@ -412,12 +431,18 @@ fn build_optimized_lock(
     data_arg: &str,
     depth: &str,
     grid_size: usize,
+    trials: usize,
+    backend: &str,
 ) -> Lockfile {
     let mut success_map = BTreeMap::new();
     success_map.insert("mean".to_string(), (success * 1e4).round() / 1e4);
     let mut cost_map = BTreeMap::new();
     cost_map.insert("mean".to_string(), (cost * 1e6).round() / 1e6);
 
+    // Prompt and fine-tune digests are NOT yet computed by a real prompt-search /
+    // LoRA step at v0.1 — they are flagged as placeholders so readers never mistake
+    // them for measured evidence. Trial metrics (success/cost), by contrast, ARE
+    // measured (either by the reference harness or the Python worker).
     let mut proof_prompt = Vec::new();
     if matches!(depth, "prompt" | "hpo" | "ft" | "full") {
         proof_prompt.push(serde_json::json!({
@@ -425,6 +450,7 @@ fn build_optimized_lock(
             "before": sha256_text("base system prompt"),
             "after": sha256_text("optimized system prompt (depth >= prompt)"),
             "gain": {"success-rate": format!("{success:+.2}")},
+            "_placeholder": true,
         }));
     }
     let mut finetune = Vec::new();
@@ -436,6 +462,7 @@ fn build_optimized_lock(
             "adapter": {"lora": "store://sha256:PLAN"},
             "samples": 0,
             "loss": 0.0,
+            "_placeholder": true,
         }));
     }
 
@@ -475,7 +502,7 @@ fn build_optimized_lock(
     lf.evidence = Evidence {
         task_pack: Some(manifest.task_packs().join(",")),
         split: "holdout".into(),
-        trials: 0,
+        trials,
         success_rate: success_map,
         cost_usd_per_task: cost_map,
         ..Default::default()
@@ -489,7 +516,7 @@ fn build_optimized_lock(
         "prompt": {"applied": proof_prompt},
         "finetune": finetune,
         "data": {"source": data_arg, "mode": data_mode, "redact": true},
-        "provenance": {"run": "flyte://opt-placeholder", "budget": {"spend-usd": 0.0, "gpu-h": 0.0}},
+        "provenance": {"run": format!("worker://{backend}"), "budget": {"spend-usd": 0.0, "gpu-h": 0.0}},
     }));
     lf
 }
