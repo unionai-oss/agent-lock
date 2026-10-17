@@ -56,7 +56,7 @@ pending publishers with identical owner/repository/workflow/environment:
 |---|---|---|
 | PyPI project name | `harness-lock` | `hlock` |
 | Owner | `unionai-oss` | `unionai-oss` |
-| Repository name | `harness-lock` | `harness-lock` |
+| Repository name | `hlock` | `hlock` |
 | Workflow name | `publish-python.yml` | `publish-python.yml` |
 | Environment name | `pypi` | `pypi-hlock` |
 

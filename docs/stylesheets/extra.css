@@ -1,0 +1,153 @@
+/* Home page feature cards: a balanced 2 x 2 grid on wide screens. */
+@media screen and (min-width: 60em) {
+  .md-typeset .grid.cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Table headers: a tinted band with an accent rule, so they read as headers at a glance. */
+.md-typeset table:not([class]) th {
+  background-color: color-mix(in srgb, var(--md-primary-fg-color) 18%, transparent);
+  border-bottom: 2px solid var(--md-primary-fg-color);
+  color: var(--md-default-fg-color);
+  font-weight: 700;
+}
+
+/* Footer: the logo's violet → pink gradient, drifting slowly like the animated logo. */
+.md-footer-meta {
+  --md-footer-fg-color: #fff;
+  --md-footer-fg-color--light: rgba(255, 255, 255, .92);
+  --md-footer-fg-color--lighter: rgba(255, 255, 255, .75);
+  --md-default-fg-color: #fff;
+  --md-default-fg-color--light: rgba(255, 255, 255, .92);
+  --md-typeset-a-color: #fff;
+  position: relative;
+  background-image: linear-gradient(120deg, #7c3aed, #a855f7, #ec4899, #8b5cf6, #7c3aed);
+  background-size: 300% 300%;
+  animation: hl-footer-drift 20s ease-in-out infinite;
+}
+[data-md-color-scheme="slate"] .md-footer-meta {
+  background-image: linear-gradient(120deg, #2e1065, #5b21b6, #9d174d, #4c1d95, #2e1065);
+}
+.md-footer-meta::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  opacity: .45;
+  background: linear-gradient(90deg, #a78bfa, #f472b6, #a78bfa);
+  background-size: 200% 100%;
+  animation: hl-footer-drift 8s linear infinite;
+}
+.md-footer-meta,
+.md-footer-meta .md-copyright,
+.md-footer-meta .md-copyright__highlight,
+.md-footer-meta .md-social__link {
+  color: rgba(255, 255, 255, .92);
+}
+.md-footer-meta.md-typeset a,
+.md-footer-meta .md-copyright a,
+.md-footer-meta .md-copyright a:hover {
+  color: #fff;
+  text-decoration: underline;
+  text-decoration-color: rgba(255, 255, 255, .5);
+}
+.md-footer-meta .md-social__link svg {
+  fill: rgba(255, 255, 255, .92);
+}
+.md-footer-meta .md-social__link:hover {
+  transform: translateY(-1px);
+}
+.md-footer-meta .md-social__link:hover svg {
+  fill: #fff;
+}
+@keyframes hl-footer-drift {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .md-footer-meta, .md-footer-meta::before { animation: none; }
+}
+
+/* Home page hero: tagline, lead, call-to-action buttons, compact install command. */
+.md-typeset .hl-tagline {
+  margin: -.4em 0 .6em;
+  text-align: center;
+  font-size: 1.15rem;
+  font-weight: 700;
+  background: linear-gradient(90deg, #a78bfa, #f472b6);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.md-typeset .hl-lead {
+  max-width: 34rem;
+  margin: 0 auto;
+  text-align: center;
+  color: var(--md-default-fg-color--light);
+}
+.md-typeset .hl-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: .75rem;
+  margin: 1.6em 0 1.2em;
+}
+.md-typeset .hl-actions p {
+  display: contents;
+}
+.md-typeset .md-button.hl-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .45em;
+  margin: 0;
+  padding: .55em 1.3em;
+  border-radius: .7rem;
+  font-weight: 600;
+  transition: transform .15s ease, box-shadow .2s ease, background-position .4s ease,
+              border-color .2s ease, color .2s ease;
+}
+.md-typeset .md-button.hl-btn .twemoji svg {
+  width: 1.05em;
+  height: 1.05em;
+}
+.md-typeset .md-button.hl-btn--primary {
+  border: 0;
+  color: #fff;
+  background: linear-gradient(110deg, #7c3aed, #a855f7 45%, #ec4899);
+  background-size: 160% 100%;
+  box-shadow: 0 .4rem 1.4rem -.5rem rgba(236, 72, 153, .6);
+}
+.md-typeset .md-button.hl-btn--primary:hover,
+.md-typeset .md-button.hl-btn--primary:focus {
+  color: #fff;
+  background-position: 100% 0;
+  transform: translateY(-1px);
+  box-shadow: 0 .6rem 1.8rem -.5rem rgba(236, 72, 153, .75);
+}
+.md-typeset .md-button.hl-btn--primary .twemoji {
+  transition: transform .2s ease;
+}
+.md-typeset .md-button.hl-btn--primary:hover .twemoji {
+  transform: translateX(3px);
+}
+.md-typeset .md-button.hl-btn--ghost {
+  color: var(--md-default-fg-color);
+  background: transparent;
+  border: 1px solid var(--md-default-fg-color--lighter);
+}
+.md-typeset .md-button.hl-btn--ghost:hover,
+.md-typeset .md-button.hl-btn--ghost:focus {
+  color: var(--md-default-fg-color);
+  background: color-mix(in srgb, #a78bfa 10%, transparent);
+  border-color: #a78bfa;
+  transform: translateY(-1px);
+}
+.md-typeset .hl-install {
+  max-width: 28rem;
+  margin: 0 auto 1.6em;
+}
+@media (prefers-reduced-motion: reduce) {
+  .md-typeset .md-button.hl-btn,
+  .md-typeset .md-button.hl-btn .twemoji { transition: none; }
+}

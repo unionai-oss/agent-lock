@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 620" role="img" aria-label="hlock architecture: the Python CLI and API call the Rust core through PyO3; the core runs trials in process on the local backend, or hands them to a Python worker on devbox and cluster, which runs heavy stages and can lift them to Flyte or Union tasks.">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#8b949e"/>
+    </marker>
+    <style>
+      .t  { font: 600 17px ui-sans-serif, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #e6edf3; }
+      .s  { font: 400 13.5px ui-sans-serif, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #8b949e; }
+      .lb { font: 700 11.5px ui-sans-serif, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; letter-spacing: .12em; }
+      .m  { font: 500 15px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #e6edf3; }
+      .ms { font: 400 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #8b949e; }
+      .e  { font: 500 13px ui-sans-serif, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #c9d1d9; }
+      .wire { stroke: #8b949e; stroke-width: 1.6; fill: none; }
+    </style>
+  </defs>
+
+  <rect width="960" height="620" rx="18" fill="#0d1117"/>
+  <rect x=".5" y=".5" width="959" height="619" rx="18" fill="none" stroke="#30363d"/>
+
+  <!-- Python layer -->
+  <rect x="230" y="34" width="500" height="104" rx="14" fill="#3b82f6" fill-opacity=".08" stroke="#3b82f6" stroke-opacity=".7"/>
+  <text x="250" y="58" class="lb" fill="#60a5fa">PYTHON · pip install hlock</text>
+  <rect x="270" y="74" width="190" height="46" rx="10" fill="#161b22" stroke="#3b82f6" stroke-opacity=".5"/>
+  <text x="365" y="102" class="m" text-anchor="middle">hlock CLI</text>
+  <rect x="500" y="74" width="190" height="46" rx="10" fill="#161b22" stroke="#3b82f6" stroke-opacity=".5"/>
+  <text x="595" y="102" class="m" text-anchor="middle">import hlock</text>
+
+  <path class="wire" d="M480 138V186" marker-end="url(#arrow)"/>
+  <text x="494" y="167" class="e">PyO3 bindings</text>
+
+  <!-- Rust core -->
+  <rect x="60" y="190" width="840" height="112" rx="14" fill="#f97316" fill-opacity=".07" stroke="#f97316" stroke-opacity=".7"/>
+  <text x="80" y="214" class="lb" fill="#fb923c">RUST · harness-lock-core</text>
+  <text x="880" y="214" class="s" text-anchor="end">deterministic: plans, measures, aggregates, locks</text>
+  <g>
+    <rect x="91"  y="234" width="118" height="46" rx="10" fill="#161b22" stroke="#f97316" stroke-opacity=".45"/>
+    <rect x="223" y="234" width="118" height="46" rx="10" fill="#161b22" stroke="#f97316" stroke-opacity=".45"/>
+    <rect x="355" y="234" width="118" height="46" rx="10" fill="#161b22" stroke="#f97316" stroke-opacity=".45"/>
+    <rect x="487" y="234" width="118" height="46" rx="10" fill="#161b22" stroke="#f97316" stroke-opacity=".45"/>
+    <rect x="619" y="234" width="118" height="46" rx="10" fill="#161b22" stroke="#f97316" stroke-opacity=".45"/>
+    <rect x="751" y="234" width="118" height="46" rx="10" fill="#161b22" stroke="#f97316" stroke-opacity=".45"/>
+    <text x="150" y="262" class="m" text-anchor="middle">manifest</text>
+    <text x="282" y="262" class="m" text-anchor="middle">lockfile</text>
+    <text x="414" y="262" class="m" text-anchor="middle">store</text>
+    <text x="546" y="262" class="m" text-anchor="middle">task packs</text>
+    <text x="678" y="262" class="m" text-anchor="middle">search</text>
+    <text x="810" y="262" class="m" text-anchor="middle">resolver</text>
+  </g>
+
+  <!-- backends -->
+  <path class="wire" d="M230 302V370" marker-end="url(#arrow)"/>
+  <text x="244" y="341" class="e">backend = local</text>
+  <path class="wire" d="M690 302V370" marker-end="url(#arrow)"/>
+  <text x="704" y="332" class="e">backend = devbox | cluster</text>
+  <text x="704" y="350" class="s">versioned JSON contract</text>
+
+  <rect x="80" y="374" width="300" height="84" rx="14" fill="#22c55e" fill-opacity=".08" stroke="#22c55e" stroke-opacity=".7"/>
+  <text x="230" y="408" class="t" text-anchor="middle">In-process reference harness</text>
+  <text x="230" y="433" class="s" text-anchor="middle">deterministic · offline · CI-friendly</text>
+
+  <rect x="540" y="374" width="300" height="84" rx="14" fill="#3b82f6" fill-opacity=".08" stroke="#3b82f6" stroke-opacity=".7"/>
+  <text x="690" y="408" class="t" text-anchor="middle">Python worker</text>
+  <text x="690" y="433" class="ms" text-anchor="middle">harness_lock.tasks.worker</text>
+
+  <!-- worker fan-out -->
+  <path class="wire" d="M690 458V482H560V512" marker-end="url(#arrow)"/>
+  <path class="wire" d="M690 482H815V512" stroke-dasharray="5 5" marker-end="url(#arrow)"/>
+  <text x="826" y="501" class="s">optional</text>
+
+  <rect x="420" y="516" width="280" height="80" rx="14" fill="#161b22" stroke="#30363d"/>
+  <text x="560" y="546" class="t" text-anchor="middle">Heavy stages</text>
+  <text x="560" y="570" class="s" text-anchor="middle">LLM trials · traces · synthetic data</text>
+  <text x="560" y="587" class="s" text-anchor="middle">grading · prompt search · LoRA</text>
+
+  <rect x="720" y="516" width="200" height="80" rx="14" fill="#a78bfa" fill-opacity=".08" stroke="#a78bfa" stroke-opacity=".8" stroke-dasharray="6 5"/>
+  <text x="820" y="546" class="t" text-anchor="middle">Flyte / Union tasks</text>
+  <text x="820" y="570" class="s" text-anchor="middle">CPU + GPU images</text>
+  <text x="820" y="587" class="s" text-anchor="middle">caching · lineage</text>
+</svg>

@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 300" role="img" aria-label="How hlock works: harness.toml and task packs feed hlock resolve, which searches, evaluates, and selects a stack, then writes harness.lock, which hlock check and hlock run use.">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#8b949e"/>
+    </marker>
+    <linearGradient id="lock" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#a78bfa"/>
+      <stop offset="1" stop-color="#f472b6"/>
+    </linearGradient>
+    <style>
+      .t  { font: 600 17px ui-sans-serif, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #e6edf3; }
+      .s  { font: 400 13.5px ui-sans-serif, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #8b949e; }
+      .lb { font: 700 11.5px ui-sans-serif, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; letter-spacing: .12em; }
+      .m  { font: 600 16px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #e6edf3; }
+      .n  { font: 700 13px ui-sans-serif, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #0d1117; }
+      .wire { stroke: #8b949e; stroke-width: 1.6; fill: none; }
+    </style>
+  </defs>
+
+  <rect width="960" height="300" rx="18" fill="#0d1117"/>
+  <rect x=".5" y=".5" width="959" height="299" rx="18" fill="none" stroke="#30363d"/>
+
+  <!-- inputs -->
+  <text x="40" y="44" class="lb" fill="#8b949e">YOU DECLARE</text>
+  <rect x="40" y="60" width="230" height="78" rx="14" fill="#161b22" stroke="#30363d"/>
+  <text x="62" y="94" class="m">harness.toml</text>
+  <text x="62" y="118" class="s">candidates · objective · budget</text>
+  <rect x="40" y="170" width="230" height="78" rx="14" fill="#161b22" stroke="#30363d"/>
+  <text x="62" y="204" class="m">task packs</text>
+  <text x="62" y="228" class="s">prompts · fixtures · graders</text>
+
+  <path class="wire" d="M270 99H296V150H318" marker-end="url(#arrow)"/>
+  <path class="wire" d="M270 209H296V150" />
+
+  <!-- resolve -->
+  <text x="322" y="44" class="lb" fill="#a78bfa">HLOCK RESOLVE</text>
+  <rect x="322" y="60" width="320" height="188" rx="14" fill="#a78bfa" fill-opacity=".07" stroke="#a78bfa" stroke-opacity=".7"/>
+  <g>
+    <circle cx="352" cy="96" r="12" fill="#a78bfa"/><text x="352" y="101" class="n" text-anchor="middle">1</text>
+    <text x="376" y="94" class="t">search</text>
+    <text x="376" y="113" class="s">LLMs × decision × harness × policy</text>
+    <circle cx="352" cy="154" r="12" fill="#c084fc"/><text x="352" y="159" class="n" text-anchor="middle">2</text>
+    <text x="376" y="152" class="t">evaluate</text>
+    <text x="376" y="171" class="s">run every trial on your tasks</text>
+    <circle cx="352" cy="212" r="12" fill="#f472b6"/><text x="352" y="217" class="n" text-anchor="middle">3</text>
+    <text x="376" y="210" class="t">select</text>
+    <text x="376" y="229" class="s">Pareto front + constraints</text>
+  </g>
+
+  <path class="wire" d="M642 150H690" marker-end="url(#arrow)"/>
+
+  <!-- lock -->
+  <text x="694" y="44" class="lb" fill="#f472b6">YOU SHIP</text>
+  <rect x="694" y="60" width="226" height="96" rx="14" fill="url(#lock)" fill-opacity=".16" stroke="url(#lock)" stroke-width="1.6"/>
+  <text x="716" y="96" class="m">harness.lock</text>
+  <text x="716" y="120" class="s">pinned · hashed · portable</text>
+  <text x="716" y="139" class="s">plus the evidence</text>
+
+  <path class="wire" d="M750 156V188" marker-end="url(#arrow)"/>
+  <path class="wire" d="M864 156V188" marker-end="url(#arrow)"/>
+  <rect x="694" y="192" width="110" height="56" rx="12" fill="#161b22" stroke="#22c55e" stroke-opacity=".7"/>
+  <text x="749" y="217" class="m" text-anchor="middle" style="font-size:14px">check</text>
+  <text x="749" y="236" class="s" text-anchor="middle" style="font-size:12px">CI drift gate</text>
+  <rect x="810" y="192" width="110" height="56" rx="12" fill="#161b22" stroke="#3b82f6" stroke-opacity=".7"/>
+  <text x="865" y="217" class="m" text-anchor="middle" style="font-size:14px">run</text>
+  <text x="865" y="236" class="s" text-anchor="middle" style="font-size:12px">the pinned stack</text>
+</svg>

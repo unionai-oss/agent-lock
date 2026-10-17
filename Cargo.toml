@@ -13,7 +13,7 @@ version = "0.1.2"
 edition = "2021"
 license = "Apache-2.0"
 authors = ["Niels Bantilan <niels.bantilan@gmail.com>"]
-repository = "https://github.com/unionai-oss/harness-lock"
+repository = "https://github.com/unionai-oss/hlock"
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
