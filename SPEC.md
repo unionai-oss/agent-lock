@@ -1252,7 +1252,8 @@ Because a code harness has an entrypoint, hlock can execute it for real in `reso
 | `HLOCK_OUTPUT` | optional path for a JSON result: `{success, cost_usd, steps, trace}` |
 
 Exit code `0` means success when no result file is written. A Python `entrypoint` runs
-through a thin shim that builds `ctx` from the same variables, so there's one execution path.
+through a small shim, passed with `python -c` so the agent's interpreter needs nothing from
+hlock installed, that builds `ctx` from the same variables; there's one execution path.
 
 #### 7.8.4 `hlock pin`: lock the setup you have
 
@@ -1346,7 +1347,44 @@ harness-native settings). Code harnesses launch through their entrypoint with th
 contract. Sign-in state isn't copied; the first launch of an isolated root may ask the user
 to log in once.
 
-#### 7.8.7 Delivery
+#### 7.8.7 `hlock localize`: a local equivalent of any lock
+
+`hlock localize [harness.lock] -o harness.local.lock` takes any lock (pinned, resolved, or
+optimized) and produces the best equivalent that uses only local components. The output name
+is the user's choice; `.local` is a convention.
+
+What gets replaced:
+
+- **The harness**, if it's proprietary or can't reach a local endpoint. Profiles gain two
+  flags: `open-source` and `local-models` (whether the harness can use an OpenAI- or
+  Anthropic-compatible local endpoint). Candidates are `--harness <name>` if given, else the
+  source harness when it qualifies, else the default set (`opencode`, `pi`, `codex` with its
+  OSS provider, `hermes`, `goose`), filtered to what's installed or installable.
+- **LLM roles and the decision model**, if they use API providers. They move to a local
+  runtime: `--runtime ollama|lmstudio|llama-cpp|vllm|…` if given, else the installed runtimes.
+  Runtime profiles gain a small model catalog (`[[catalog]]`: model id, family, parameter
+  count, quantization, minimum memory, tool-calling support, and a capability tier per role).
+  The default search set is filtered to what fits this machine's RAM/VRAM, and weights already
+  on disk come first. `--models a,b,c` overrides the catalog.
+
+What carries over unchanged: the portable components (MCP servers, skills, instructions),
+translated as in `launch`. Remote MCP servers are kept but flagged, since they're also network
+dependencies (`--strict` drops them).
+
+How the choice is made: with task packs available (a `harness.toml` with `[tasks]`, or
+`--tasks`), `localize` builds an in-memory search space (local harnesses × local models ×
+decision models) and runs it through the `optimize`/resolver pipeline with an all-local
+constraint. A localized code harness runs for real through the §7.8.3 contract; agent CLIs use
+the backend's adapter until native adapters exist. The evidence is compared with the source
+lock's (`[evidence.baseline]`). Without tasks, it ranks candidates heuristically (memory fit,
+on-disk weights, catalog tier) and marks the lock `evaluated = false`.
+
+The output is an ordinary lock (`kind = "localized"`, `base-lock` naming the source) with
+`[[runtime]]` entries whose models are `present = false` until pulled, so the rest of the flow
+applies unchanged: `hlock sync --pull` fetches weights, and `hlock launch` starts the local
+harness.
+
+#### 7.8.8 Delivery
 
 | Stage | Scope |
 |---|---|
@@ -1354,9 +1392,10 @@ to log in once.
 | 2 | `hlock pin`, secret redaction, vendoring, pinned-lock rendering in `show`/`tree`, drift in `check` |
 | 3 | `hlock sync`: plan, auto/manual steps, `--plan`, `--json`, `--skill`, `--prefix`, `--docker` |
 | 4 | `hlock launch`, cross-harness translation of portable components, and the code-harness execution contract for `run`/`resolve` |
+| 5 | `hlock localize`: profile `open-source`/`local-models` flags, runtime model catalogs, memory-aware candidate search, and the all-local optimize pass |
 
 Open: multi-harness pins in one lock (open question 2), and whether sync should ever run
-system package managers itself instead of printing commands.
+system package managers by default instead of printing commands.
 
 ---
 

@@ -45,6 +45,7 @@ models = ["/models"]
 [mcp]
 sources = ["config#/mcp", "project#/mcp"]
 write = "config#/mcp"
+shape = "opencode"
 
 [skills]
 dirs = ["{root}/skills", "~/.agents/skills", ".opencode/skills", ".agents/skills", ".claude/skills"]

@@ -198,6 +198,9 @@ pub struct ProviderSpec {
 pub struct McpSpec {
     pub sources: Vec<String>,
     pub write: Option<String>,
+    /// How servers are written: `standard` (`command`/`args`/`env`, `url`/`headers`),
+    /// `opencode`, `goose`, or `codex`.
+    pub shape: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

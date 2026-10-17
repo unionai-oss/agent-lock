@@ -28,6 +28,7 @@ nav = [
     "guides/harnesses.md",
     "guides/pin.md",
     "guides/sync.md",
+    "guides/launch.md",
     "guides/harness-profiles.md",
     "guides/task-packs.md",
     "guides/backends.md",

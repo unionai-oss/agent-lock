@@ -82,11 +82,13 @@ hlock harness list      # the harnesses on this machine, and the one you're runn
 hlock pin               # lock your current setup into harness.lock
 hlock check             # fail if your setup drifted from the pin
 hlock sync              # on another machine: rehydrate it (also --prefix DIR, --docker)
+hlock launch            # start a session that matches the lock (or: hlock launch opencode)
 ```
 
 See [Harnesses](https://unionai-oss.github.io/hlock/guides/harnesses/) and
-[Pinning your setup](https://unionai-oss.github.io/hlock/guides/pin/), and
-[Rehydrating with sync](https://unionai-oss.github.io/hlock/guides/sync/).
+[Pinning your setup](https://unionai-oss.github.io/hlock/guides/pin/),
+[Rehydrating with sync](https://unionai-oss.github.io/hlock/guides/sync/), and
+[Launching a locked harness](https://unionai-oss.github.io/hlock/guides/launch/).
 
 <details>
 <summary><b>Python API</b></summary>

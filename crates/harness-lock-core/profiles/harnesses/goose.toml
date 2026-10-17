@@ -30,6 +30,7 @@ provider = ["env:GOOSE_PROVIDER", "config#/GOOSE_PROVIDER"]
 [mcp]
 sources = ["config#/extensions"]
 write = "config#/extensions"
+shape = "goose"
 
 [skills]
 dirs = ["~/.agents/skills", ".agents/skills"]

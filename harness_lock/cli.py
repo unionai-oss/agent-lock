@@ -30,7 +30,9 @@ from harness_lock import (
     __version__,
     harness_profile,
     harnesses,
+    launch_prepare,
     load,
+    run_code_harness,
     runtimes,
     sync_dockerfile,
     sync_plan,
@@ -72,12 +74,16 @@ click.rich_click.MAX_WIDTH = 100
 click.rich_click.COMMAND_GROUPS = {
     "hlock": [
         {"name": "Lock", "commands": ["init", "resolve", "pin", "check"]},
-        {"name": "Rehydrate", "commands": ["sync"]},
+        {"name": "Rehydrate", "commands": ["sync", "launch"]},
         {"name": "Harness", "commands": ["harness", "runtime"]},
         {"name": "Inspect", "commands": ["show", "tree", "backend"]},
         {"name": "Run & evolve", "commands": ["run", "upgrade", "optimize"]},
     ]
 }
+
+
+# Code harnesses and the devbox worker default to the interpreter running hlock.
+os.environ.setdefault("HL_PYTHON", sys.executable)
 
 
 def _fail(message: str, hint: str | None = None) -> None:
@@ -657,7 +663,11 @@ def _pin_tree(lock: dict) -> Tree:
 def run(prompt: str, as_json: bool) -> None:
     """Run the locked agent on PROMPT."""
     with _friendly_errors():
+        lf = Lockfile.load(LOCK)
         agent = load(LOCK)
+    if _is_code_harness(lf.harness):
+        _run_code_harness(prompt, as_json)
+        return
     with _working("Running the locked agent…"):
         raw = agent.run(prompt)
     outcome = json.loads(raw)
@@ -671,6 +681,107 @@ def run(prompt: str, as_json: bool) -> None:
             f"[muted]cost[/] {_usd(outcome.get('cost_usd', 0))}"
         )
     sys.exit(0 if ok else 1)
+
+
+def _is_code_harness(name: str) -> bool:
+    try:
+        return json.loads(harness_profile(name))["profile"]["kind"] == "custom"
+    except ValueError:
+        return False
+
+
+def _run_code_harness(prompt: str, as_json: bool) -> None:
+    with _working("Running the locked harness…"):
+        r = json.loads(run_code_harness(prompt, LOCK))
+    if as_json:
+        console.print_json(data=r)
+    else:
+        if r.get("log"):
+            console.print(r["log"].rstrip(), markup=False, highlight=False)
+        mark = "[ok]✓ success[/]" if r["success"] else f"[fail]✗ failed[/] [muted](exit {r.get('exit_code')})[/]"
+        console.print(f"{mark}  [muted]latency[/] {_secs(r.get('latency_s'))}  [muted]cost[/] {_usd(r.get('cost_usd'))}")
+    sys.exit(0 if r["success"] else 1)
+
+
+@main.command(context_settings={"ignore_unknown_options": True, "allow_interspersed_args": False})
+@click.argument("args", nargs=-1, type=click.UNPROCESSED)
+@click.option("--lock", "lock", default=LOCK, show_default=True, help="Lock to launch.")
+@click.option("--prefix", default=None, help="Where isolated roots live.  [dim]\\[default: .hlock/env][/]")
+@click.option("--in-place", is_flag=True, help="Use your own config instead of an isolated root (same harness only).")
+@click.option("--allow-version-mismatch", is_flag=True, help="Launch even if the installed version differs from the lock.")
+@click.option("--dry-run", is_flag=True, help="Prepare everything, print the command, and don't start it.")
+@click.option("--json", "as_json", is_flag=True, help="With --dry-run: print the launch plan as JSON.")
+def launch(args: tuple[str, ...], lock: str, prefix: str | None, in_place: bool, allow_version_mismatch: bool,
+           dry_run: bool, as_json: bool) -> None:
+    """Start a session in a harness that matches the lock.
+
+    [cmd]hlock launch[/] starts the lock's harness; [cmd]hlock launch pi[/] starts another one with
+    the lock's portable parts (MCP servers, skills, instructions, model) translated for it.
+    Other arguments are passed through: [cmd]hlock launch claude --resume[/]. Put arguments
+    after [cmd]--[/] to pass one that hlock would otherwise take, like [cmd]-- --dry-run[/].
+
+    The session runs against an isolated config root in [path].hlock/env/[/], restored from
+    the lock, so it sees exactly the locked setup and none of your unlocked config.
+    """
+    # hlock's own flags count anywhere before `--`; everything else goes to the harness.
+    harness = None
+    rest: list[str] = []
+    items = list(args)
+    i = 0
+    while i < len(items):
+        a = items[i]
+        if a == "--":
+            rest.extend(items[i + 1:])
+            break
+        if a == "--dry-run":
+            dry_run = True
+        elif a == "--json":
+            as_json = True
+        elif a == "--in-place":
+            in_place = True
+        elif a == "--allow-version-mismatch":
+            allow_version_mismatch = True
+        elif a in ("--lock", "--prefix") and i + 1 < len(items):
+            if a == "--lock":
+                lock = items[i + 1]
+            else:
+                prefix = items[i + 1]
+            i += 1
+        elif harness is None and not rest and not a.startswith("-") and _known_harness(a):
+            harness = a
+        else:
+            rest.append(a)
+        i += 1
+    with _working("Preparing the locked environment…"):
+        prep = json.loads(launch_prepare(lock, harness=harness, prefix=prefix,
+                                         allow_version_mismatch=allow_version_mismatch,
+                                         in_place=in_place, args=rest))
+    if as_json:
+        console.print_json(data=prep)
+        return
+    copies = [line for line in prep["done"] if line.startswith("Copy skill")]
+    for line in prep["done"]:
+        if len(copies) <= 6 or not line.startswith("Copy skill"):
+            console.print(f"[ok]✓[/] {line}")
+    if len(copies) > 6:
+        console.print(f"[ok]✓[/] copied {len(copies)} skills")
+    for line in prep["notes"]:
+        console.print(f"[warn]![/] {line}")
+    if prep["missing_secrets"]:
+        console.print(f"[warn]![/] {len(prep['missing_secrets'])} secret(s) not set; their placeholders stay: "
+                      + ", ".join(prep["missing_secrets"]))
+    env_txt = " ".join(f"{k}={_rel(v)}" for k, v in prep["env"].items() if not k.startswith(("HLOCK_", "PYTHON")))
+    shown = " ".join(prep["argv"][:1] + [a if len(a) < 60 else a[:57] + "…" for a in prep["argv"][1:]])
+    console.print(f"[brand]▶[/] {prep['harness_name']}  [muted]{env_txt}[/] [cmd]{shown}[/]", soft_wrap=True)
+    if dry_run:
+        return
+    env = {**os.environ, **prep["env"]}
+    sys.stdout.flush()
+    sys.stderr.flush()
+    try:
+        os.execvpe(prep["argv"][0], prep["argv"], env)
+    except OSError as e:
+        _fail(f"cannot start {prep['argv'][0]}: {e}")
 
 
 @main.command()

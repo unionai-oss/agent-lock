@@ -36,6 +36,7 @@ base-url = ["/base_url"]
 [mcp]
 sources = ["config#/mcp_servers"]
 write = "config#/mcp_servers"
+shape = "codex"
 
 [skills]
 dirs = ["{root}/skills", "~/.agents/skills", ".agents/skills", ".codex/skills"]

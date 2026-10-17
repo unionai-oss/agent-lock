@@ -710,6 +710,42 @@ fn sync_dockerfile(plan: &str, path: String) -> PyResult<String> {
     Ok(json_str(serde_json::json!({"dockerfile": dockerfile, "entrypoint": entrypoint})))
 }
 
+/// Prepare `hlock launch`: verify, materialize the isolated root, and return
+/// JSON with the argv and environment to exec, plus what was done and notes.
+#[pyfunction]
+#[pyo3(signature = (path="harness.lock".to_string(), harness=None, prefix=None, allow_version_mismatch=false, in_place=false, args=Vec::new()))]
+fn launch_prepare(
+    path: String,
+    harness: Option<String>,
+    prefix: Option<String>,
+    allow_version_mismatch: bool,
+    in_place: bool,
+    args: Vec<String>,
+) -> PyResult<String> {
+    let (reg, ctx) = registry()?;
+    let lock = core::Lockfile::load(Path::new(&path)).map_err(py_err)?;
+    let opts = core::launch::LaunchOptions { target: harness, prefix: prefix.map(PathBuf::from), allow_version_mismatch, in_place };
+    let prep = core::launch::prepare(&lock, Path::new(&path), &reg, &ctx, &opts, &args).map_err(py_err)?;
+    Ok(json_str(serde_json::json!(prep)))
+}
+
+/// Run a locked code harness (`[harnesses.<id>]`) on a prompt through the
+/// execution contract. Returns JSON with success, output, cost, latency and log.
+#[pyfunction]
+#[pyo3(signature = (prompt, path="harness.lock".to_string(), workspace=None, timeout=600))]
+fn run_code_harness(prompt: String, path: String, workspace: Option<String>, timeout: u64) -> PyResult<String> {
+    let (reg, ctx) = registry()?;
+    let lock = core::Lockfile::load(Path::new(&path)).map_err(py_err)?;
+    let profile = reg.require_harness(&lock.harness.name).map_err(py_err)?;
+    if profile.kind != "custom" {
+        return Err(PyValueError::new_err(format!("{} isn't a code harness", profile.id)));
+    }
+    let ws = workspace.map(PathBuf::from).unwrap_or_else(|| ctx.cwd.clone());
+    let inv = core::contract::invocation(profile, Some(&lock), Some(Path::new(&path)), None, &prompt, &ws, 0, &ctx).map_err(py_err)?;
+    let r = core::contract::run(&inv, &ctx, std::time::Duration::from_secs(timeout)).map_err(py_err)?;
+    Ok(json_str(serde_json::json!(r)))
+}
+
 #[pymodule]
 fn _harness_lock(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyManifest>()?;
@@ -732,6 +768,8 @@ fn _harness_lock(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(sync_run_step, m)?)?;
     m.add_function(wrap_pyfunction!(sync_skill, m)?)?;
     m.add_function(wrap_pyfunction!(sync_dockerfile, m)?)?;
+    m.add_function(wrap_pyfunction!(launch_prepare, m)?)?;
+    m.add_function(wrap_pyfunction!(run_code_harness, m)?)?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add("LOCK_VERSION", core::LOCK_VERSION)?;
     Ok(())

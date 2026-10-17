@@ -43,7 +43,16 @@ pub struct SyncOptions {
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum Action {
     /// Restore a vendored config file (whole, or only `pointers` merged into the target).
-    WriteConfig { path: PathBuf, vendored: PathBuf, format: String, pointers: Vec<String> },
+    /// Secrets missing from the environment are taken from `path`, else from `fallback`
+    /// (the user's live config, when materializing into a prefix on the same machine).
+    WriteConfig {
+        path: PathBuf,
+        vendored: PathBuf,
+        format: String,
+        pointers: Vec<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        fallback: Option<PathBuf>,
+    },
     /// Copy a vendored directory (a skill) into place.
     CopyDir { from: PathBuf, to: PathBuf },
     /// Copy a file (an instruction file) into place.
@@ -124,7 +133,7 @@ impl Plan {
 const PH_OPEN: &str = "${HLOCK_SECRET_";
 
 /// Secret placeholder names in a string.
-fn placeholders(s: &str) -> Vec<String> {
+pub(crate) fn placeholders(s: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut rest = s;
     while let Some(i) = rest.find(PH_OPEN) {
@@ -186,7 +195,7 @@ fn fill(desired: &Value, actual: Option<&Value>, env: &BTreeMap<String, String>,
     }
 }
 
-fn set_pointer(root: &mut Value, ptr: &str, v: Value) {
+pub(crate) fn set_pointer(root: &mut Value, ptr: &str, v: Value) {
     if ptr.is_empty() {
         *root = v;
         return;
@@ -206,19 +215,40 @@ fn set_pointer(root: &mut Value, ptr: &str, v: Value) {
     }
 }
 
+/// Merge `b` under `a`: keys missing from `a` come from `b` (used to combine the
+/// target's existing values with the live config's when filling secrets).
+fn overlay(a: Option<Value>, b: Option<Value>) -> Option<Value> {
+    match (a, b) {
+        (Some(Value::Object(mut am)), Some(Value::Object(bm))) => {
+            for (k, bv) in bm {
+                let merged = overlay(am.remove(&k), Some(bv));
+                if let Some(v) = merged {
+                    am.insert(k, v);
+                }
+            }
+            Some(Value::Object(am))
+        }
+        (Some(Value::String(s)), b) if s.contains(PH_OPEN) => b.or(Some(Value::String(s))),
+        (Some(a), _) => Some(a),
+        (None, b) => b,
+    }
+}
+
 /// The file contents a `WriteConfig` would produce, and the secrets it lacks.
-fn desired_config(vendored: &Path, format: &str, pointers: &[String], target: &Path, env: &BTreeMap<String, String>) -> Result<(Value, BTreeSet<String>)> {
+fn desired_config(vendored: &Path, format: &str, pointers: &[String], target: &Path, fallback: Option<&Path>, env: &BTreeMap<String, String>) -> Result<(Value, BTreeSet<String>)> {
     let src_fmt = if pointers.is_empty() { if format == "jsonc" { "json" } else { format } } else { "json" };
     let desired = read_config(vendored, src_fmt)?.ok_or_else(|| Error::Lockfile(format!("vendored file missing: {}", vendored.display())))?;
     let actual = read_config(target, format).ok().flatten();
+    let live = fallback.and_then(|f| read_config(f, format).ok().flatten());
+    let secrets_from = overlay(actual.clone(), live);
     let mut missing = BTreeSet::new();
     if pointers.is_empty() {
-        return Ok((fill(&desired, actual.as_ref(), env, &mut missing), missing));
+        return Ok((fill(&desired, secrets_from.as_ref(), env, &mut missing), missing));
     }
     let mut out = actual.clone().filter(Value::is_object).unwrap_or_else(|| json!({}));
     for p in pointers {
         if let Some(sub) = desired.get(p) {
-            let cur = actual.as_ref().and_then(|a| a.pointer(p));
+            let cur = secrets_from.as_ref().and_then(|a| a.pointer(p));
             set_pointer(&mut out, p, fill(sub, cur, env, &mut missing));
         }
     }
@@ -230,7 +260,7 @@ fn desired_config(vendored: &Path, format: &str, pointers: &[String], target: &P
 // --------------------------------------------------------------------------- //
 
 /// The context a plan writes into, and the environment that selects it.
-fn target_ctx(profile: &HarnessProfile, ctx: &Ctx, opts: &SyncOptions) -> (Ctx, String, BTreeMap<String, String>) {
+pub(crate) fn target_ctx(profile: &HarnessProfile, ctx: &Ctx, opts: &SyncOptions) -> (Ctx, String, BTreeMap<String, String>) {
     let mut t = ctx.clone();
     let mut iso = BTreeMap::new();
     if let Some(dir) = &opts.docker {
@@ -267,7 +297,7 @@ fn expand(p: &str, root: &Path, t: &Ctx) -> PathBuf {
     t.expand(p, Some(root))
 }
 
-fn lock_dir_of(lock_path: &Path, ctx: &Ctx) -> PathBuf {
+pub(crate) fn lock_dir_of(lock_path: &Path, ctx: &Ctx) -> PathBuf {
     match lock_path.parent().filter(|p| !p.as_os_str().is_empty()) {
         Some(p) if p.is_absolute() => p.to_path_buf(),
         Some(p) => ctx.cwd.join(p),
@@ -276,7 +306,7 @@ fn lock_dir_of(lock_path: &Path, ctx: &Ctx) -> PathBuf {
 }
 
 /// A path for display: `~/…` under the home directory, relative under the project.
-fn pretty(p: &Path, ctx: &Ctx) -> String {
+pub(crate) fn pretty(p: &Path, ctx: &Ctx) -> String {
     if let Ok(rel) = p.strip_prefix(&ctx.cwd) {
         return rel.to_string_lossy().into_owned();
     }
@@ -429,7 +459,8 @@ pub fn plan(lock: &Lockfile, lock_path: &Path, reg: &Registry, ctx: &Ctx, opts: 
             continue;
         };
         let vendored = lock_dir.join(vend);
-        let (desired, missing) = desired_config(&vendored, &c.format, &c.pointers, &target, &t.env)?;
+        let fallback = (mode == "prefix").then(|| profile.file_path(&c.id, ctx)).flatten();
+        let (desired, missing) = desired_config(&vendored, &c.format, &c.pointers, &target, fallback.as_deref(), &t.env)?;
         collect_placeholders(&read_config(&vendored, if c.pointers.is_empty() && c.format != "jsonc" { &c.format } else { "json" })?.unwrap_or_default(), &mut all_secrets);
         missing_secrets.extend(missing.iter().cloned());
         let actual = read_config(&target, &c.format).ok().flatten();
@@ -445,7 +476,7 @@ pub fn plan(lock: &Lockfile, lock_path: &Path, reg: &Registry, ctx: &Ctx, opts: 
             title: if same { what } else if actual.is_some() { format!("Update {what}") } else { format!("Write {what}") },
             status: if same { "satisfied" } else { "auto" }.into(),
             reason: if same { "matches the lock".into() } else if actual.is_some() { "the current file is kept as .hlock-bak".into() } else { String::new() },
-            action: (!same).then(|| Action::WriteConfig { path: target.clone(), vendored, format: c.format.clone(), pointers: c.pointers.clone() }),
+            action: (!same).then(|| Action::WriteConfig { path: target.clone(), vendored, format: c.format.clone(), pointers: c.pointers.clone(), fallback }),
             ..Default::default()
         });
     }
@@ -783,7 +814,7 @@ fn backup(path: &Path) -> Result<Option<PathBuf>> {
     Ok(Some(bak))
 }
 
-fn copy_tree(from: &Path, to: &Path) -> Result<()> {
+pub(crate) fn copy_tree(from: &Path, to: &Path) -> Result<()> {
     std::fs::create_dir_all(to)?;
     for e in std::fs::read_dir(from)?.flatten() {
         let (src, dst) = (e.path(), to.join(e.file_name()));
@@ -800,8 +831,8 @@ fn copy_tree(from: &Path, to: &Path) -> Result<()> {
 pub fn run_step(step: &Step, ctx: &Ctx) -> Result<String> {
     let Some(action) = &step.action else { return Ok("nothing to do".into()) };
     match action {
-        Action::WriteConfig { path, vendored, format, pointers } => {
-            let (desired, missing) = desired_config(vendored, format, pointers, path, &ctx.env)?;
+        Action::WriteConfig { path, vendored, format, pointers, fallback } => {
+            let (desired, missing) = desired_config(vendored, format, pointers, path, fallback.as_deref(), &ctx.env)?;
             let fmt = if format == "jsonc" || !pointers.is_empty() { "json" } else { format.as_str() };
             let text = render_config(&desired, fmt).map_err(Error::Profile)?;
             if let Some(parent) = path.parent() {

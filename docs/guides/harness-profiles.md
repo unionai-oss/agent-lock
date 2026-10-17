@@ -8,9 +8,9 @@ new harness, or fixing a path for an existing one, means editing a file.
 
     Profiles drive detection, versions and install sources, `hlock harness show`, targeting,
     [`hlock pin`](pin.md) (`model`, `providers`, `mcp`, `skills`, `bundles`, `instructions`,
-    `files`), and [`hlock sync`](sync.md) (`install`, `files`, `skills.write`,
-    `config-root`). The `launch` and `run` fields are for the upcoming `hlock launch` (design:
-    [SPEC §7.8](https://github.com/unionai-oss/hlock/blob/main/SPEC.md)).
+    `files`), [`hlock sync`](sync.md) (`install`, `files`, `skills.write`, `config-root`), and
+    [`hlock launch`](launch.md) (`launch`, `mcp.write`, `mcp.shape`, `instructions`, and `run`
+    for code harnesses).
 
 ## Where profiles come from
 
@@ -112,7 +112,7 @@ or `record` (a digest only, for project files that are already in git).
 | `files.<id>` | `path`, `isolated`, `format`, `restore`, `pointers` |
 | `model` | `default`, `small`, `provider`, `base-url` sources; `format`; `default-provider` |
 | `providers` | `source`, plus pointers into each provider for `base-url` and `models` |
-| `mcp` | `sources`, `write` |
+| `mcp` | `sources`, `write`, `shape` (`standard`, `opencode`, `codex`, `goose`): how `launch` writes servers |
 | `skills` | `dirs`, `write`, `builtin-dirs`, `builtin-manifest` |
 | `bundles` | Plugins/packages: `kind`, `extractor` (`claude-plugins`, `pi-packages`, `npm-list`), `source`, `lockfile` |
 | `instructions` | Instruction files the harness reads |

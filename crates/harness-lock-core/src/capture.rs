@@ -1249,6 +1249,20 @@ fn vendor_skill(dir: &Path, vroot: &str, name: &str, s: &mut Skill, vendor: &mut
     }
 }
 
+/// The raw MCP server entries a harness has configured right now, by name.
+pub(crate) fn live_mcp_servers(profile: &HarnessProfile, ctx: &Ctx) -> BTreeMap<String, Value> {
+    let src = Sources::new(profile, ctx);
+    let mut out = BTreeMap::new();
+    for s in &profile.mcp.sources {
+        if let Some(Value::Object(m)) = src.get(s) {
+            for (k, v) in m {
+                out.entry(k).or_insert(v);
+            }
+        }
+    }
+    out
+}
+
 // --------------------------------------------------------------------------- //
 // Diff
 // --------------------------------------------------------------------------- //
