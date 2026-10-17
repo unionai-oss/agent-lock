@@ -4,7 +4,7 @@
 
 # hlock
 
-### Make your agent harness setup pinnable, portable, and tunable.
+### Make your agent harness pinnable, portable, and tunable.
 
 **Tune your agent stack against your own tasks, then pin the winner in a `harness.lock`.**
 

@@ -1,6 +1,6 @@
 ---
 title: hlock
-description: Make your agent harness setup pinnable, portable, and tunable. Tune your agent stack against your own tasks, then pin the winner in a harness.lock.
+description: Make your agent harness pinnable, portable, and tunable. Tune your agent stack against your own tasks, then pin the winner in a harness.lock.
 ---
 
 <p align="center">
@@ -9,7 +9,7 @@ description: Make your agent harness setup pinnable, portable, and tunable. Tune
 
 # hlock { style="text-align: center" }
 
-<p class="hl-tagline">Make your agent harness setup pinnable, portable, and tunable.</p>
+<p class="hl-tagline">Make your agent harness pinnable, portable, and tunable.</p>
 
 `hlock` tunes your agent stack against your own tasks, then pins the winner in a
 `harness.lock`: a pinned, hashed, version-controlled description of the agent that

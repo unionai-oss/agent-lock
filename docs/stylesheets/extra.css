@@ -70,15 +70,26 @@
 }
 
 /* Home page hero: tagline, lead, call-to-action buttons, compact install command. */
+/* Size the tagline from the content column (container query units), so it stays on one
+   line on wide screens; on narrow screens it wraps normally. */
+.md-content__inner {
+  container-type: inline-size;
+}
 .md-typeset .hl-tagline {
   margin: -.4em 0 .6em;
   text-align: center;
-  font-size: 1.15rem;
+  font-size: 1.05rem;
   font-weight: 700;
   background: linear-gradient(90deg, #a78bfa, #f472b6);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+@container (min-width: 32rem) {
+  .md-typeset .hl-tagline {
+    font-size: min(1.15rem, 3.2cqi);
+    white-space: nowrap;
+  }
 }
 .md-typeset .hl-lead {
   max-width: 34rem;
