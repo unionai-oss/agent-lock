@@ -59,6 +59,12 @@ impl PyManifest {
         self.inner.task_packs()
     }
 
+    /// `[target] harness`, if set.
+    #[getter]
+    fn target_harness(&self) -> Option<String> {
+        self.inner.target_harness()
+    }
+
     fn to_json(&self) -> String {
         serde_json::to_string(&self.inner.tasks).unwrap_or_default()
     }
@@ -303,6 +309,11 @@ impl PyLockfile {
     }
 
     #[getter]
+    fn harness_version(&self) -> Option<String> {
+        self.inner.harness.version.clone()
+    }
+
+    #[getter]
     fn decision(&self) -> String {
         self.inner.decision.kind.clone()
     }
@@ -381,12 +392,19 @@ impl PyLockedAgent {
 // module functions
 // --------------------------------------------------------------------------- //
 #[pyfunction]
-#[pyo3(signature = (manifest=None, backend=None, workdir=None))]
-fn resolve(py: Python<'_>, manifest: Option<PyObject>, backend: Option<String>, workdir: Option<String>) -> PyResult<PyLockfile> {
+#[pyo3(signature = (manifest=None, backend=None, workdir=None, harness=None))]
+fn resolve(
+    py: Python<'_>,
+    manifest: Option<PyObject>,
+    backend: Option<String>,
+    workdir: Option<String>,
+    harness: Option<String>,
+) -> PyResult<PyLockfile> {
     let core_manifest = resolve_manifest(py, manifest, backend.as_deref())?;
     let wd = workdir.unwrap_or_else(|| ".harnesslock".to_string());
     let backend = core::Backend::parse(core_manifest.backend_target().as_str());
     let mut tuner = core::Tuner::with_backend(core_manifest, &wd, backend);
+    tuner.harness_override = harness;
     let lf = tuner.tune().map_err(py_err)?;
     Ok(PyLockfile { inner: lf })
 }
@@ -497,6 +515,112 @@ fn optimize(
     .to_string())
 }
 
+// --------------------------------------------------------------------------- //
+// harness & runtime profiles
+// --------------------------------------------------------------------------- //
+/// The profile registry for this directory: built-ins, profile dirs, and the
+/// `[harnesses.<id>]` tables of `./harness.toml` when there is one.
+fn registry() -> PyResult<(core::Registry, core::profiles::Ctx)> {
+    let ctx = core::profiles::Ctx::from_process();
+    let path = ctx.cwd.join(core::MANIFEST_PATH);
+    let manifest = if path.is_file() { Some(core::Manifest::load(&path).map_err(py_err)?) } else { None };
+    let reg = core::Registry::load_for(&ctx, manifest.as_ref()).map_err(py_err)?;
+    Ok((reg, ctx))
+}
+
+fn json_str(v: serde_json::Value) -> String {
+    v.to_string()
+}
+
+/// Every known harness profile with what's installed here, as a JSON list.
+/// Pass `probe=False` to skip running each harness's `--version`.
+#[pyfunction]
+#[pyo3(signature = (probe=true))]
+fn harnesses(probe: bool) -> PyResult<String> {
+    let (reg, ctx) = registry()?;
+    let rows: Vec<serde_json::Value> = reg
+        .harnesses
+        .iter()
+        .map(|h| {
+            let p = if probe {
+                core::profiles::probe_harness(h, &ctx)
+            } else {
+                core::profiles::Probe { id: h.id.clone(), active: h.is_active(&ctx), ..Default::default() }
+            };
+            serde_json::json!({
+                "id": h.id, "name": h.name, "kind": h.kind, "aliases": h.aliases, "support": h.support,
+                "origin": h.origin, "probe": p,
+            })
+        })
+        .collect();
+    Ok(json_str(serde_json::json!(rows)))
+}
+
+/// Every known inference-runtime profile with what's installed here, as JSON.
+#[pyfunction]
+#[pyo3(signature = (probe=true))]
+fn runtimes(probe: bool) -> PyResult<String> {
+    let (reg, ctx) = registry()?;
+    let rows: Vec<serde_json::Value> = reg
+        .runtimes
+        .iter()
+        .map(|r| {
+            let p = if probe {
+                core::profiles::probe_runtime(r, &ctx)
+            } else {
+                core::profiles::Probe { id: r.id.clone(), ..Default::default() }
+            };
+            serde_json::json!({
+                "id": r.id, "name": r.name, "aliases": r.aliases, "ports": r.ports,
+                "origin": r.origin, "models_dir": r.models_dir(&ctx), "probe": p,
+            })
+        })
+        .collect();
+    Ok(json_str(serde_json::json!(rows)))
+}
+
+/// One harness profile (by id or alias), its probe, and the paths it resolves to here.
+#[pyfunction]
+fn harness_profile(name: &str) -> PyResult<String> {
+    let (reg, ctx) = registry()?;
+    let h = reg.require_harness(name).map_err(py_err)?;
+    let root = h.config_root(&ctx);
+    let files: serde_json::Map<String, serde_json::Value> = h
+        .files
+        .keys()
+        .map(|id| {
+            let p = h.file_path(id, &ctx).unwrap_or_default();
+            (id.clone(), serde_json::json!({"path": p, "exists": p.exists()}))
+        })
+        .collect();
+    let skills: Vec<serde_json::Value> = h
+        .skills
+        .dirs
+        .iter()
+        .map(|d| {
+            let p = ctx.expand(d, Some(&root));
+            serde_json::json!({"path": p, "exists": p.is_dir()})
+        })
+        .collect();
+    Ok(json_str(serde_json::json!({
+        "profile": h,
+        "probe": core::profiles::probe_harness(h, &ctx),
+        "paths": {"config_root": root, "files": files, "skills": skills},
+        "isolation_env": h.config_root.env,
+    })))
+}
+
+/// Pick the target harness: `explicit`, then `HLOCK_HARNESS`, then
+/// `manifest_target`, then the harness running this process, then the only
+/// installed one. Returns JSON `{"id", "reason"}`.
+#[pyfunction]
+#[pyo3(signature = (explicit=None, manifest_target=None))]
+fn select_harness(explicit: Option<String>, manifest_target: Option<String>) -> PyResult<String> {
+    let (reg, ctx) = registry()?;
+    let sel = reg.select(explicit.as_deref(), manifest_target.as_deref(), &ctx).map_err(py_err)?;
+    Ok(json_str(serde_json::json!(sel)))
+}
+
 #[pymodule]
 fn _harness_lock(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyManifest>()?;
@@ -509,6 +633,10 @@ fn _harness_lock(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(load, m)?)?;
     m.add_function(wrap_pyfunction!(upgrade, m)?)?;
     m.add_function(wrap_pyfunction!(optimize, m)?)?;
+    m.add_function(wrap_pyfunction!(harnesses, m)?)?;
+    m.add_function(wrap_pyfunction!(runtimes, m)?)?;
+    m.add_function(wrap_pyfunction!(harness_profile, m)?)?;
+    m.add_function(wrap_pyfunction!(select_harness, m)?)?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add("LOCK_VERSION", core::LOCK_VERSION)?;
     Ok(())

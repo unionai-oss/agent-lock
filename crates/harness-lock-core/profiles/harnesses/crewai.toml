@@ -1,0 +1,6 @@
+# Framework profile: CrewAI.
+id = "crewai"
+name = "CrewAI"
+kind = "framework"
+homepage = "https://docs.crewai.com"
+packages = ["pypi:crewai"]

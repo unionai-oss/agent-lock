@@ -1,0 +1,18 @@
+# Runtime profile: LocalAI.
+id = "localai"
+name = "LocalAI"
+aliases = ["local-ai"]
+homepage = "https://localai.io"
+binaries = ["local-ai"]
+version = { args = ["--version"] }
+ports = [8080]
+provider-names = ["localai", "local-ai"]
+pull = "local-ai models install {model}"
+serve = "local-ai run"
+
+[[install]]
+method = "brew"
+package = "localai"
+[[install]]
+method = "script"
+command = "curl https://localai.io/install.sh | sh"

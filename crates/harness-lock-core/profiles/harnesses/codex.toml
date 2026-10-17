@@ -1,0 +1,46 @@
+# Harness profile: OpenAI Codex CLI.
+id = "codex"
+name = "Codex CLI"
+kind = "cli"
+aliases = ["codex-cli", "openai-codex"]
+vendor = "OpenAI"
+homepage = "https://developers.openai.com/codex/cli"
+support = "full"
+binaries = ["codex"]
+version = { args = ["--version"] }
+active-env = ["CODEX_THREAD_ID", "CODEX_SANDBOX", "CODEX_MANAGED_BY_NPM", "CODEX_MANAGED_BY_BUN"]
+config-root = { env = "CODEX_HOME", default = "~/.codex" }
+instructions = ["AGENTS.md", "AGENTS.override.md", "{root}/AGENTS.md"]
+
+[[install]]
+method = "npm"
+package = "@openai/codex"
+[[install]]
+method = "brew-cask"
+package = "codex"
+
+[files.config]
+path = "{root}/config.toml"
+format = "toml"
+restore = "whole"
+
+[model]
+default = ["config#/model"]
+provider = ["config#/model_provider"]
+default-provider = "openai"
+
+[providers]
+source = ["config#/model_providers"]
+base-url = ["/base_url"]
+
+[mcp]
+sources = ["config#/mcp_servers"]
+write = "config#/mcp_servers"
+
+[skills]
+dirs = ["{root}/skills", "~/.agents/skills", ".agents/skills", ".codex/skills"]
+write = "{root}/skills"
+builtin-dirs = ["{root}/skills/.system"]
+
+[launch]
+model-flag = "--model"

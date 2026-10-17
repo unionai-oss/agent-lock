@@ -1,0 +1,32 @@
+# Harness profile: Amp (Sourcegraph).
+id = "amp"
+name = "Amp"
+kind = "cli"
+aliases = ["ampcode", "sourcegraph-amp"]
+vendor = "Sourcegraph"
+homepage = "https://ampcode.com"
+support = "basic"
+binaries = ["amp"]
+version = { args = ["--version"] }
+config-root = { env = "XDG_CONFIG_HOME", suffix = "amp", default = "~/.config/amp" }
+instructions = ["AGENTS.md", "{root}/AGENTS.md"]
+
+[[install]]
+method = "npm"
+package = "@sourcegraph/amp"
+[[install]]
+method = "script"
+command = "curl -fsSL https://ampcode.com/install.sh | bash"
+
+[files.settings]
+path = "{root}/settings.json"
+format = "jsonc"
+restore = "whole"
+
+[mcp]
+sources = ["settings#/amp.mcpServers"]
+write = "settings#/amp.mcpServers"
+
+[skills]
+dirs = ["~/.config/agents/skills", ".agents/skills"]
+write = "~/.config/agents/skills"

@@ -1,0 +1,18 @@
+# Runtime profile: SGLang.
+id = "sglang"
+name = "SGLang"
+homepage = "https://docs.sglang.ai"
+binaries = ["sglang"]
+version = { args = ["version"] }
+ports = [30000]
+provider-names = ["sglang"]
+pull = "hf download {model} --revision {revision}"
+serve = "python -m sglang.launch_server --model-path {model} --revision {revision}"
+
+[models]
+layout = "hf-cache"
+dirs = ["env:HF_HUB_CACHE", "~/.cache/huggingface/hub"]
+
+[[install]]
+method = "pip"
+package = "sglang[all]"

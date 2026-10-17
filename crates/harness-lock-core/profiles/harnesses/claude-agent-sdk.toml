@@ -1,0 +1,11 @@
+# Framework profile: Claude Agent SDK (Python).
+id = "claude-agent-sdk"
+name = "Claude Agent SDK"
+kind = "framework"
+aliases = ["claude-sdk"]
+vendor = "Anthropic"
+homepage = "https://docs.claude.com/en/docs/agent-sdk/overview"
+packages = ["pypi:claude-agent-sdk"]
+instructions = ["CLAUDE.md"]
+[skills]
+dirs = [".claude/skills"]

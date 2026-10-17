@@ -18,6 +18,8 @@ pub enum Error {
     Json(#[from] serde_json::Error),
     #[error("tuning error: {0}")]
     Tuning(String),
+    #[error("{0}")]
+    Profile(String),
     #[error("python worker error: {0}")]
     Worker(String),
 }

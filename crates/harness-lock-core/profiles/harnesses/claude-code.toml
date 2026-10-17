@@ -1,0 +1,66 @@
+# Harness profile: Claude Code. See docs/guides/harness-profiles.md for the format.
+id = "claude-code"
+name = "Claude Code"
+kind = "cli"
+aliases = ["claude"]
+vendor = "Anthropic"
+homepage = "https://code.claude.com"
+support = "full"
+binaries = ["claude"]
+version = { args = ["--version"] }
+active-env = ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"]
+config-root = { env = "CLAUDE_CONFIG_DIR", default = "~/.claude" }
+instructions = ["CLAUDE.md", ".claude/CLAUDE.md", "{root}/CLAUDE.md"]
+
+[[install]]
+method = "brew-cask"
+package = "claude-code"
+[[install]]
+method = "npm"
+package = "@anthropic-ai/claude-code"
+[[install]]
+method = "script"
+command = "curl -fsSL https://claude.ai/install.sh | bash -s {version}"
+path-hints = ["/.local/share/claude/", "/.claude/local/"]
+
+[files.settings]
+path = "{root}/settings.json"
+format = "json"
+restore = "whole"
+[files.state]
+# Outside the config root by default; inside it when CLAUDE_CONFIG_DIR is set.
+path = "~/.claude.json"
+isolated = "{root}/.claude.json"
+format = "json"
+restore = "pointers"
+pointers = ["/mcpServers"]
+[files.project-mcp]
+path = ".mcp.json"
+format = "json"
+restore = "record"
+[files.project-settings]
+path = ".claude/settings.json"
+format = "json"
+restore = "record"
+
+[model]
+default = ["env:ANTHROPIC_MODEL", "settings#/model"]
+small = ["env:ANTHROPIC_SMALL_FAST_MODEL", "settings#/env/ANTHROPIC_SMALL_FAST_MODEL"]
+default-provider = "anthropic"
+base-url = ["env:ANTHROPIC_BASE_URL", "settings#/env/ANTHROPIC_BASE_URL"]
+
+[mcp]
+sources = ["state#/mcpServers", "project-mcp#/mcpServers"]
+write = "state#/mcpServers"
+
+[skills]
+dirs = ["{root}/skills", ".claude/skills"]
+write = "{root}/skills"
+
+[[bundles]]
+kind = "plugin"
+extractor = "claude-plugins"
+source = "{root}/plugins/installed_plugins.json"
+
+[launch]
+model-flag = "--model"

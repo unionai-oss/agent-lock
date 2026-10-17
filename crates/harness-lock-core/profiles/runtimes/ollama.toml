@@ -1,0 +1,25 @@
+# Runtime profile: Ollama. See docs/guides/harness-profiles.md for the format.
+id = "ollama"
+name = "Ollama"
+homepage = "https://ollama.com"
+binaries = ["ollama"]
+version = { args = ["--version"] }
+ports = [11434]
+provider-names = ["ollama", "ollama-local"]
+pull = "ollama pull {model}"
+serve = "ollama serve"
+
+[models]
+layout = "ollama"
+dirs = ["env:OLLAMA_MODELS", "~/.ollama/models", "/usr/share/ollama/.ollama/models"]
+
+[[install]]
+method = "brew"
+package = "ollama"
+[[install]]
+method = "app"
+command = "Download the Ollama app from https://ollama.com/download"
+path-hints = ["/Ollama.app/"]
+[[install]]
+method = "script"
+command = "curl -fsSL https://ollama.com/install.sh | sh"

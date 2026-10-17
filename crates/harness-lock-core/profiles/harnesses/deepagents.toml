@@ -1,0 +1,11 @@
+# Framework profile: Deep Agents (LangChain).
+id = "deepagents"
+name = "Deep Agents"
+kind = "framework"
+aliases = ["deep-agents", "langchain-deepagents"]
+vendor = "LangChain"
+homepage = "https://github.com/langchain-ai/deepagents"
+packages = ["pypi:deepagents", "pypi:langchain", "pypi:langgraph"]
+instructions = ["AGENTS.md"]
+[skills]
+dirs = ["skills", ".deepagents/skills"]

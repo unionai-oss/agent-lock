@@ -1,0 +1,11 @@
+# Runtime profile: Jan.
+id = "jan"
+name = "Jan"
+homepage = "https://jan.ai"
+binaries = []
+ports = [1337]
+provider-names = ["jan"]
+
+[[install]]
+method = "brew-cask"
+package = "jan"

@@ -1166,6 +1166,195 @@ harness-lock therefore:
 The scanner is pluggable (`hlock skills scan --scanner …`). The built-in one is a baseline, not
 a guarantee.
 
+### 7.8 Harness-aware workflow: profiles, pin, sync, launch
+
+Most people already have a harness they like (Claude Code, Codex, Pi, OpenCode, Hermes,
+Cursor, …) with a model, MCP servers, skills and plugins configured by hand. This section
+makes hlock aware of *that* setup: it can target a harness, pin its current state into
+`harness.lock`, rehydrate it on another machine, and launch an isolated session that matches
+the lock. The loop is `hlock pin` → commit → `hlock sync` → `hlock launch <harness>`.
+
+#### 7.8.1 Harness and runtime profiles
+
+A **profile** is a declarative TOML description of one harness or one local inference
+runtime. Profiles replace per-harness code: adding a harness means writing a file, not a
+release. A harness profile says:
+
+| Field | Purpose |
+|---|---|
+| `id`, `aliases`, `kind` | Identity. `kind` is `cli` (an agent CLI), `framework` (an agent library), or `custom` (a project's own agent). |
+| `binaries`, `version.args` | How to find it on `PATH` and read its version. |
+| `active-env` | Variables the harness sets in processes it spawns. Their presence means "hlock is running inside this harness". |
+| `config-root` | Where user config lives and the variable that relocates it (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `PI_CODING_AGENT_DIR`, `HERMES_HOME`, `CURSOR_CONFIG_DIR`, `XDG_CONFIG_HOME` + `opencode`). |
+| `install` | Install methods (`npm`, `brew`, `brew-cask`, `pip`, `uv-tool`, `script`, `app`, `manual`) with path hints, so hlock can tell how the copy on this machine was installed and reproduce it. |
+| `files` | Named config files with a format (`json`, `jsonc`, `toml`, `yaml`) and a restore policy: `whole`, `pointers` (only some subtrees, e.g. `/mcpServers` of `~/.claude.json`), or `record` (digest only, e.g. project files already in git). |
+| `model`, `providers` | Ordered sources for the default and small model, provider, and base URL, written as `env:VAR` or `<file>#<json-pointer>`. |
+| `mcp`, `skills`, `bundles`, `instructions` | Where MCP servers, skill directories, plugins/packages, and instruction files live. |
+| `launch`, `run` | How to start a session (CLI) or run the agent (code harness). |
+
+Runtime profiles (Ollama, LM Studio, llama.cpp, vLLM, SGLang, MLX LM, LocalAI, Docker Model
+Runner, Jan) add default ports and provider names (to recognize a harness's base URL), the
+model store layout, and pull/serve command templates. Unsloth isn't a runtime; its models are
+Hugging Face repos (`hf.co/unsloth/…`) that a runtime serves, so they pin as model sources.
+
+Built-in profiles ship inside `harness-lock-core`. Users add or override them by `id` in
+`~/.config/hlock/profiles/{harnesses,runtimes}/*.toml`, `$HLOCK_PROFILE_PATH`, and
+`./.hlock/profiles/` (later wins). Profiles marked `support = "full"` are covered by tests
+for pin, sync and launch; `basic` ones cover detection, version, MCP and skills.
+
+#### 7.8.2 Targeting a harness
+
+The target harness is part of the manifest, because it changes what the lock means:
+
+```toml
+[target]
+harness = "claude-code"        # id or alias
+```
+
+Commands take `--harness <name>` as a one-off override. (Not `--target`, which `[backend]`
+already uses for the execution backend.) Resolution order: `--harness`, `HLOCK_HARNESS`,
+`[target] harness`, the harness hlock is running inside, then the only installed harness.
+`hlock init` writes `[target]` when the choice is unambiguous.
+
+For `resolve`, the target narrows `[candidates] harness` (it becomes the sole candidate, or
+must be one of them) and the lock's `[harness]` pins the version and install source of the
+installed copy. Trials still run on the backend's adapter until native adapters exist, and
+`[harness] adapter` records which one ran, so evidence is never mislabeled. `check` fails when
+the lock's harness differs from `[target]` or when the installed version differs from the pin.
+
+#### 7.8.3 Code harnesses: frameworks and custom agents
+
+Not every agent is a CLI. Pydantic AI agents, LangChain Deep Agents, LangGraph graphs, OpenAI
+Agents SDK apps, and hand-written loops are declared in the manifest:
+
+```toml
+[harnesses.triage]
+framework = "pydantic-ai"            # inherit the framework's pinned packages
+entrypoint = "triage.agent:run"      # python module:callable, called as fn(prompt, ctx)
+
+[harnesses.loop]
+command = ["./bin/agent", "--model", "{model}", "{prompt}"]   # any executable
+packages = ["pypi:httpx"]
+```
+
+A project harness is a `custom` profile, so targeting, pin, sync and launch treat it like any
+other. Framework profiles (`pydantic-ai`, `deepagents`, `langgraph`, `openai-agents`,
+`claude-agent-sdk`, `google-adk`, `smolagents`, `crewai`) contribute the packages to pin.
+Because a code harness has an entrypoint, hlock can execute it for real in `resolve` and
+`run` through a small contract:
+
+| Input | |
+|---|---|
+| `HLOCK_PROMPT`, `HLOCK_MODEL` (`provider:model`), `HLOCK_LLM_BASE_URL` | the task and the locked model |
+| `HLOCK_WORKSPACE` | working directory for artifacts |
+| `HLOCK_MCP_CONFIG` | a generated `mcp.json` (`mcpServers` shape) for the locked MCP servers |
+| `HLOCK_SKILLS_DIR`, `HLOCK_LOCK` | locked skills and the lockfile itself |
+| `HLOCK_OUTPUT` | optional path for a JSON result: `{success, cost_usd, steps, trace}` |
+
+Exit code `0` means success when no result file is written. A Python `entrypoint` runs
+through a thin shim that builds `ctx` from the same variables, so there's one execution path.
+
+#### 7.8.4 `hlock pin`: lock the setup you have
+
+`hlock pin [--harness X]` captures the live state of one harness into `harness.lock`, with no
+manifest or tuning needed:
+
+- `[harness]`: id, version, install source (`brew-cask:claude-code@2.1.285`,
+  `npm:@earendil-works/pi-coding-agent@1.0.0`, …).
+- `[[llm]]`: the default model (`role = "default"`) and the small/fast model
+  (`role = "small"`) when configured, with provider, base URL, and the runtime serving it.
+- `[[runtime]]` (new): local inference runtimes the configured providers point at (matched
+  by provider name, then port), their versions, and the models the harness references, with
+  digests where the store has them (Ollama manifests, GGUF files, HF revisions). Remote
+  endpoints are recorded as endpoints only.
+- `[[tool]] kind = "mcp"`: each MCP server, normalized across config shapes (`command` as a
+  string or a list, `env`/`environment`, `url`, `type`/`transport`, enabled flags), with the
+  scope it came from.
+- `[[skill]]`: each skill directory with a tree digest (§7.7.2) and an origin: a git
+  checkout records remote + commit, a plugin's skills are `bundled`, harness-shipped skills
+  are `harness-builtin`, and anything else is `local`.
+- `[[native]]`: plugins, packages and extensions (Claude Code plugins + marketplaces, Pi
+  packages with their npm lock versions, OpenCode plugins).
+- `[[instructions]]`: instruction files with digests.
+- `[[config]]` (new): each profile file with its digest and restore policy.
+- A top-level `kind = "pin"` and `[provenance] backend = "pin"`; pinned locks carry no evidence.
+
+Content the target machine can't fetch (hand-written user skills, user-level instruction
+files, restorable config files) is **vendored** into `.hlock/vendor/` next to the lock, so the
+lock plus that directory is self-contained. **Secrets are never written.** Values under keys
+that look secret (`*key*`, `*token*`, `*secret*`, `*password*`, `authorization`, `headers`,
+`env` values), and auth files, are replaced with a placeholder naming an environment
+variable, e.g. `${HLOCK_SECRET_FLYTE_MCP_AUTHORIZATION}`. `sync` and `launch` fill them in.
+
+Re-pinning shows a diff (`~ model: sonnet → opus`, `+ mcp github`). `pin` refuses to overwrite
+a resolved lock (one with evidence) unless given `--force` or `-o other.lock`. On a pinned
+lock, `hlock check` re-captures and reports drift, so CI can guard an agent setup the same way
+it guards a manifest.
+
+#### 7.8.5 `hlock sync`: rehydrate it somewhere else
+
+Installing everything automatically across package managers, OSes and GUI apps is
+unrealistic, so `sync` is built around a **plan**, not a script. Each step has an action and a
+status:
+
+| Status | Meaning |
+|---|---|
+| `satisfied` | already true here (version or digest matches) |
+| `auto` | hlock does it: write or merge a config file, copy a vendored skill, run the harness's own CLI (`claude plugin install`, `pi install npm:…@x`), pull a model through an installed runtime |
+| `manual` | needs the user: install a runtime or app (`brew install ollama`, the LM Studio app), sign in, provide a secret. hlock prints the exact command or link and why it's needed |
+
+`hlock sync` runs the `auto` steps (after confirming, or with `--yes`), then ends with the
+remaining manual steps and exits `2` while any are left; it's safe to re-run until it's clean.
+Options:
+
+- `--plan` (and `--json`): print the plan without changing anything, for people, scripts and
+  agents.
+- `--skill [DIR]`: write an Agent Skill (`hlock-rehydrate/SKILL.md`) generated from the lock
+  and plan: what to install, in what order, how to verify each step (`claude --version`,
+  `ollama list`), and how to finish with `hlock sync` and `hlock check`. A vanilla agent on a
+  fresh machine can then do the manual steps under the user's eye.
+- `--prefix DIR`: materialize into an isolated config root instead of the user's real one (a
+  "virtual environment" for the harness; see launch).
+- `--docker [--build]`: emit a `Dockerfile` that installs the harness, copies the
+  materialized config root into the image's home, and pre-installs MCP launchers. Model
+  weights stay on the host by default; runtimes are reached through `host.docker.internal`.
+- `--exact`: also remove MCP servers, skills and plugins that aren't in the lock (off by
+  default, because it edits a personal setup).
+
+Before replacing an existing file, sync writes `<file>.hlock-bak`.
+
+#### 7.8.6 `hlock launch`: start a session that matches the lock
+
+`hlock launch [<harness>] [-- harness args]` is how a locked setup gets *used*, the way
+`uv run` uses a venv:
+
+1. Verify the installed harness version matches `[harness]` (offer `hlock sync` if not).
+2. Materialize the locked config into `.hlock/env/<harness>/` (the same code path as
+   `sync --prefix`), filling secret placeholders from the environment.
+3. `exec` the harness with its config-root variable pointing there, plus `--model` from the
+   lock, so the session sees exactly the locked model, MCP servers, skills and plugins, and
+   none of the user's unlocked config (`[context] isolation = "locked-only"`, §5.4).
+   Harnesses without a relocation variable fall back to a temporary `HOME`.
+
+`launch` into a different harness than the one pinned translates the **portable** components
+(MCP servers, skills, instruction files, and the model when the target can reach its provider)
+through the target profile's writers, and lists what doesn't carry over (plugins and
+harness-native settings). Code harnesses launch through their entrypoint with the §7.8.3
+contract. Sign-in state isn't copied; the first launch of an isolated root may ask the user
+to log in once.
+
+#### 7.8.7 Delivery
+
+| Stage | Scope |
+|---|---|
+| 1 | Profiles (built-in + user + project), detection and probing, `hlock harness list/show`, `hlock runtime list`, `[target]`, `--harness` on `resolve`, target checks in `check` |
+| 2 | `hlock pin`, secret redaction, vendoring, pinned-lock rendering in `show`/`tree`, drift in `check` |
+| 3 | `hlock sync`: plan, auto/manual steps, `--plan`, `--json`, `--skill`, `--prefix`, `--docker` |
+| 4 | `hlock launch`, cross-harness translation of portable components, and the code-harness execution contract for `run`/`resolve` |
+
+Open: multi-harness pins in one lock (open question 2), and whether sync should ever run
+system package managers itself instead of printing commands.
+
 ---
 
 ## 8. Tuning backend (Flyte 2)

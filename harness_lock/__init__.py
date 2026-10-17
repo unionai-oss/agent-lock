@@ -12,9 +12,13 @@ from ._harness_lock import (
     Objective,
     SearchSpace,
     __version__,
+    harness_profile,
+    harnesses,
     load,
     optimize,
     resolve,
+    runtimes,
+    select_harness,
     upgrade,
 )
 
@@ -27,8 +31,12 @@ __all__ = [
     "Objective",
     "SearchSpace",
     "__version__",
+    "harness_profile",
+    "harnesses",
     "load",
     "optimize",
     "resolve",
+    "runtimes",
+    "select_harness",
     "upgrade",
 ]

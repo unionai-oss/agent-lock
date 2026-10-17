@@ -1,0 +1,36 @@
+# Harness profile: Goose (Block).
+id = "goose"
+name = "Goose"
+kind = "cli"
+aliases = ["block-goose"]
+vendor = "Block"
+homepage = "https://block.github.io/goose"
+support = "basic"
+binaries = ["goose"]
+version = { args = ["--version"] }
+config-root = { env = "XDG_CONFIG_HOME", suffix = "goose", default = "~/.config/goose" }
+instructions = [".goosehints", "AGENTS.md", "{root}/.goosehints"]
+
+[[install]]
+method = "brew"
+package = "block-goose-cli"
+[[install]]
+method = "script"
+command = "curl -fsSL https://github.com/block/goose/releases/download/stable/download_cli.sh | bash"
+
+[files.config]
+path = "{root}/config.yaml"
+format = "yaml"
+restore = "whole"
+
+[model]
+default = ["env:GOOSE_MODEL", "config#/GOOSE_MODEL"]
+provider = ["env:GOOSE_PROVIDER", "config#/GOOSE_PROVIDER"]
+
+[mcp]
+sources = ["config#/extensions"]
+write = "config#/extensions"
+
+[skills]
+dirs = ["~/.agents/skills", ".agents/skills"]
+write = "~/.agents/skills"

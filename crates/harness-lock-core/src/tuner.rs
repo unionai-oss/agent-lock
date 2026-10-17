@@ -9,6 +9,7 @@ use crate::adapters::{HarnessAdapter, ReferenceAdapter};
 use crate::error::{Error, Result};
 use crate::lockfile::{Context, Decision, Evidence, Harness, Instructions, LLM, Lockfile, Policy, Provenance, Skill, Tool, Verify};
 use crate::manifest::{HarnessCandidate, Manifest};
+use crate::profiles::{probe_harness, Ctx, Registry};
 use crate::search::{select_winner, Stack, StackScore, TrialResult};
 use crate::store::Store;
 use crate::tasks::TaskPack;
@@ -24,6 +25,8 @@ pub struct Tuner {
     pack_by_task: BTreeMap<String, crate::tasks::TaskPack>,
     adapter: Box<dyn HarnessAdapter>,
     holdout: Vec<crate::tasks::Task>,
+    /// Target harness from the CLI (`--harness`), overriding `[target] harness`.
+    pub harness_override: Option<String>,
 }
 
 impl Tuner {
@@ -51,6 +54,7 @@ impl Tuner {
             pack_by_task: BTreeMap::new(),
             adapter,
             holdout: Vec::new(),
+            harness_override: None,
         }
     }
 
@@ -164,6 +168,8 @@ impl Tuner {
 
     /// Tune: enumerate, run, aggregate, select, and write `harness.lock`.
     pub fn tune(&mut self) -> Result<Lockfile> {
+        let registry = Registry::load_for(&Ctx::from_process(), Some(&self.manifest))?;
+        apply_target(&mut self.manifest, self.harness_override.as_deref(), &registry)?;
         let search_tasks = self.load_packs();
         let stacks = self.enumerate_stacks();
         let seeds = self.manifest.seeds();
@@ -263,11 +269,7 @@ impl Tuner {
                 decisions: if s.decision == "none" { vec![] } else { vec!["retry".into(), "stop".into()] },
                 ..Default::default()
             },
-            harness: Harness {
-                name: s.harness.clone(),
-                pattern: Some(s.pattern.clone()),
-                ..Default::default()
-            },
+            harness: self.pin_harness(&s.harness, &s.pattern),
             tool: s.tools.iter().map(|t| Tool { name: t.clone(), kind: "builtin".into(), ..Default::default() }).collect(),
             skill: s.skills.iter().map(|sk| Skill { name: sk.clone(), origin: "first-party".into(), editable: true, evidence_digest: Some(String::new()), ..Default::default() }).collect(),
             instructions: s.instructions.iter().map(|i| Instructions { name: i.clone(), scope: "project".into(), ..Default::default() }).collect(),
@@ -297,11 +299,62 @@ impl Tuner {
         }
     }
 
+    /// The `[harness]` table for the winner. A harness with a profile gets the
+    /// version and install source of the copy on this machine, and `adapter`
+    /// records what actually ran the trials when that differs from the harness.
+    fn pin_harness(&self, name: &str, pattern: &str) -> Harness {
+        let mut h = Harness { name: name.to_string(), pattern: Some(pattern.to_string()), ..Default::default() };
+        let ctx = Ctx::from_process();
+        let Ok(registry) = Registry::load_for(&ctx, Some(&self.manifest)) else { return h };
+        if let Some(profile) = registry.harness(name) {
+            let probe = probe_harness(profile, &ctx);
+            h.version = probe.version;
+            h.source = probe.source;
+            h.adapter = Some(self.adapter.name().to_string());
+        }
+        h
+    }
+
     fn write_report(&self, lock: &Lockfile, _scores: &[StackScore]) -> Result<()> {
         let report = self.workdir.join("report.md");
         std::fs::write(&report, format!("# harness-lock report\n\n{}\n", lock.summary()))?;
         Ok(())
     }
+}
+
+/// Narrow the harness candidates to the target harness (`explicit`, else the
+/// manifest's `[target] harness`). With no harness candidates, or only the
+/// default `reference`, the target becomes the sole candidate; otherwise it must
+/// be one of them. Returns the canonical target id.
+pub fn apply_target(manifest: &mut Manifest, explicit: Option<&str>, registry: &Registry) -> Result<Option<String>> {
+    let Some(name) = explicit.map(str::to_string).or_else(|| manifest.target_harness()) else {
+        return Ok(None);
+    };
+    if name == "reference" {
+        manifest.candidates.harness.retain(|h| h.name == "reference");
+        return Ok(Some(name));
+    }
+    let profile = registry.require_harness(&name)?;
+    let cands = &mut manifest.candidates.harness;
+    let only_default = cands.iter().all(|h| h.name == "reference");
+    if only_default {
+        let pattern = cands.first().map(|h| h.pattern.clone()).unwrap_or_default();
+        *cands = vec![HarnessCandidate { name: profile.id.clone(), pattern, ..Default::default() }];
+    } else {
+        let before: Vec<String> = cands.iter().map(|h| h.name.clone()).collect();
+        cands.retain(|h| profile.matches(&h.name));
+        if cands.is_empty() {
+            return Err(Error::Manifest(format!(
+                "target harness {:?} is not one of [candidates] harness ({})",
+                profile.id,
+                before.join(", ")
+            )));
+        }
+        for h in cands.iter_mut() {
+            h.name = profile.id.clone();
+        }
+    }
+    Ok(Some(profile.id.clone()))
 }
 
 fn roundf(v: f64) -> f64 {

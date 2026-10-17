@@ -8,6 +8,9 @@ a starter one. Every section is optional, but a useful manifest has at least
 [project]
 name = "support-agent"
 
+[target]
+harness = "claude-code"
+
 [tasks]
 packs = ["./tasks"]
 seeds = 3
@@ -93,6 +96,34 @@ resolver selects from the whole Pareto front instead of failing; see
 | `max_trials` | | Upper bound on trials |
 | `max_spend_usd` | | Upper bound on spend |
 | `random_seed` | `0` | Seed for the search/holdout split |
+
+## `[target]`
+
+| Key | Description |
+|---|---|
+| `harness` | The harness this lock is for: an id or alias from `hlock harness list`, or a `[harnesses.<id>]` table. `resolve` narrows `[candidates] harness` to it and `check` enforces it. See [Harnesses](../guides/harnesses.md#target-a-harness). |
+
+## `[harnesses.<id>]`
+
+A project harness: an agent built on a framework, or any executable. It accepts every
+[harness profile](../guides/harness-profiles.md) field, plus these at the top level:
+
+| Key | Description |
+|---|---|
+| `entrypoint` | Python `module:callable` |
+| `command` | Executable and arguments; `{prompt}`, `{model}`, and `{workspace}` are placeholders |
+| `framework` | A framework profile (`pydantic-ai`, `deepagents`, `langgraph`, `openai-agents`, `claude-agent-sdk`, `google-adk`, `smolagents`, `crewai`) whose packages are pinned |
+| `packages` | Extra packages to pin, e.g. `["pypi:httpx"]` |
+| `python` | Interpreter for `entrypoint` (default `HL_PYTHON`, else `python3`) |
+| `env` | Extra environment variables |
+
+One of `entrypoint` or `command` is required.
+
+```toml
+[harnesses.triage]
+framework = "pydantic-ai"
+entrypoint = "triage.agent:run"
+```
 
 ## `[backend]`
 

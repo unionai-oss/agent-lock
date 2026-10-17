@@ -1,0 +1,59 @@
+# Harness profile: Pi coding agent.
+id = "pi"
+name = "Pi"
+kind = "cli"
+aliases = ["pi-coding-agent", "pi-agent"]
+homepage = "https://pi.dev"
+support = "full"
+binaries = ["pi"]
+version = { args = ["--version"] }
+active-env = ["PI_CODING_AGENT", "PI_SESSION_ID"]
+config-root = { env = "PI_CODING_AGENT_DIR", default = "~/.pi/agent" }
+instructions = ["AGENTS.md", "CLAUDE.md", "{root}/AGENTS.md"]
+
+[[install]]
+method = "npm"
+package = "@earendil-works/pi-coding-agent"
+
+[files.settings]
+path = "{root}/settings.json"
+format = "json"
+restore = "whole"
+[files.models]
+path = "{root}/models.json"
+format = "json"
+restore = "whole"
+[files.mcp]
+path = "{root}/mcp.json"
+format = "json"
+restore = "whole"
+[files.project-settings]
+path = ".pi/settings.json"
+format = "json"
+restore = "record"
+
+[model]
+default = ["env:PI_MODEL", "settings#/defaultModel"]
+provider = ["env:PI_PROVIDER", "settings#/defaultProvider"]
+
+[providers]
+source = ["models#/providers"]
+base-url = ["/baseUrl"]
+models = ["/models"]
+
+[mcp]
+sources = ["mcp#/mcpServers"]
+write = "mcp#/mcpServers"
+
+[skills]
+dirs = ["{root}/skills", "~/.agents/skills", ".pi/skills", ".agents/skills"]
+write = "{root}/skills"
+
+[[bundles]]
+kind = "package"
+extractor = "pi-packages"
+source = "settings#/packages"
+lockfile = "{root}/npm/package-lock.json"
+
+[launch]
+model-flag = "--model"

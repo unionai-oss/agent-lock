@@ -1,0 +1,59 @@
+# Harness profile: OpenCode.
+id = "opencode"
+name = "OpenCode"
+kind = "cli"
+aliases = ["open-code", "sst-opencode"]
+homepage = "https://opencode.ai"
+support = "full"
+binaries = ["opencode"]
+version = { args = ["--version"] }
+active-env = ["OPENCODE", "OPENCODE_SESSION_ID"]
+# OpenCode reads $XDG_CONFIG_HOME/opencode, so isolation relocates XDG_CONFIG_HOME.
+config-root = { env = "XDG_CONFIG_HOME", suffix = "opencode", default = "~/.config/opencode" }
+instructions = ["AGENTS.md", "CLAUDE.md", "{root}/AGENTS.md"]
+
+[[install]]
+method = "brew"
+package = "opencode"
+[[install]]
+method = "npm"
+package = "opencode-ai"
+[[install]]
+method = "script"
+command = "curl -fsSL https://opencode.ai/install | bash"
+path-hints = ["/.opencode/bin/"]
+
+[files.config]
+path = "{root}/opencode.json"
+format = "jsonc"
+restore = "whole"
+[files.project]
+path = "opencode.json"
+format = "jsonc"
+restore = "record"
+
+[model]
+default = ["env:OPENCODE_MODEL", "config#/model"]
+small = ["config#/small_model"]
+format = "provider/model"
+
+[providers]
+source = ["config#/provider"]
+base-url = ["/options/baseURL", "/options/baseUrl"]
+models = ["/models"]
+
+[mcp]
+sources = ["config#/mcp", "project#/mcp"]
+write = "config#/mcp"
+
+[skills]
+dirs = ["{root}/skills", "~/.agents/skills", ".opencode/skills", ".agents/skills", ".claude/skills"]
+write = "{root}/skills"
+
+[[bundles]]
+kind = "plugin"
+extractor = "npm-list"
+source = "config#/plugin"
+
+[launch]
+model-flag = "--model"

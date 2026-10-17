@@ -76,7 +76,7 @@ the complete file.
 | `[stack]` | Stack name, and the `select` rule that chose it |
 | `[[llm]]` | One entry per role: `provider`, `model`, the candidate string it came from, a `fingerprint`, and `params` |
 | `[decision]` | Decision model `kind`, its `decisions`, and `thresholds` |
-| `[harness]` | Harness `name` and `pattern` |
+| `[harness]` | Harness `name` and `pattern`. For a harness with a profile, also the installed `version`, its install `source` (e.g. `brew-cask:claude-code@2.1.285`), and the `adapter` that ran the trials. |
 | `[policy]` | `retries`, `max-steps`, `human-approval`, `risky-actions`, `tool-allowlist`, `sandbox` |
 | `[context]` | Context `isolation` and `compaction` settings |
 | `tool`, `skill`, `instructions` | Locked peripherals (reserved in v0.1) |

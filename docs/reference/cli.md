@@ -18,6 +18,9 @@ Failures print a one-line error with a hint and exit `1`.
 | [`check`](#check) | Fail if `harness.toml` has drifted from `harness.lock` |
 | [`show`](#show) | Show the locked stack and its evidence |
 | [`tree`](#tree) | Print the locked component graph |
+| [`harness list`](#harness-list) | List known harnesses and what's installed |
+| [`harness show`](#harness-show) | Show a harness profile and the paths it reads here |
+| [`runtime list`](#runtime-list) | List local inference runtimes and what's installed |
 | [`backend status`](#backend-status) | Show the configured backend and environment |
 | [`run`](#run) | Run the locked agent on a prompt |
 | [`upgrade`](#upgrade) | Plan, apply, or roll back component upgrades |
@@ -30,13 +33,14 @@ Global options: `-V`/`--version` and `-h`/`--help`.
 Write a starter `harness.toml` that uses the reference provider.
 
 ```bash
-hlock init [--name NAME] [--pack PATH] [--force]
+hlock init [--name NAME] [--pack PATH] [--harness NAME] [--force]
 ```
 
 | Option | Default | Description |
 |---|---|---|
 | `--name` | `demo` | Project name |
 | `--pack` | `./tasks` | Task pack directory. Warns if it has no `pack.toml`. |
+| `--harness` | the harness you're running inside | Write `[target] harness`. Without it, and outside a harness, `[target]` is left commented out. |
 | `--force` | | Overwrite an existing `harness.toml` |
 
 ## `resolve`
@@ -45,12 +49,13 @@ Run the resolver over the manifest's search space, write `harness.lock`, and pri
 chosen stack with its evidence.
 
 ```bash
-hlock resolve [--backend local|devbox|cluster] [--workdir DIR]
+hlock resolve [--backend local|devbox|cluster] [--harness NAME] [--workdir DIR]
 ```
 
 | Option | Default | Description |
 |---|---|---|
 | `--backend` | manifest `[backend] target` | Where trials run |
+| `--harness` | manifest `[target] harness` | Target harness for this run. See [Harnesses](../guides/harnesses.md#resolve-for-a-target). |
 | `--workdir` | `.harnesslock` | Where trial artifacts go |
 
 ## `check`
@@ -58,6 +63,10 @@ hlock resolve [--backend local|devbox|cluster] [--workdir DIR]
 Compare the manifest hash recorded in `harness.lock` with the hash of the current
 `harness.toml`. Exits `0` when they match and `1` on drift, or when either file is
 missing. See [Using hlock in CI](../guides/ci.md).
+
+`check` also fails when the lock is for a different harness than `[target] harness`, or
+when the installed harness's version differs from the one the lock pins (skipped when the
+harness isn't installed).
 
 ```bash
 hlock check
@@ -82,6 +91,37 @@ Print the locked components as a tree.
 
 ```bash
 hlock tree
+```
+
+## `harness list`
+
+List every known harness (agent CLIs, frameworks, and project harnesses from
+`[harnesses.<id>]`) with the installed version and install source. `●` marks the harness
+hlock is running inside. See [Harnesses](../guides/harnesses.md).
+
+```bash
+hlock harness list [--json]
+```
+
+## `harness show`
+
+Show one harness profile and the paths it resolves to on this machine: config root, config
+files, skill directories, and for code harnesses the entrypoint and package versions.
+
+```bash
+hlock harness show [NAME] [--json]
+```
+
+`NAME` is an id or alias and defaults to the target harness (`--harness` order, see
+[Harnesses](../guides/harnesses.md#target-a-harness)).
+
+## `runtime list`
+
+List local inference runtimes (Ollama, LM Studio, llama.cpp, vLLM, SGLang, MLX LM, LocalAI,
+Docker Model Runner, Jan), whether each is installed, its default port, and its model store.
+
+```bash
+hlock runtime list [--json]
 ```
 
 ## `backend status`

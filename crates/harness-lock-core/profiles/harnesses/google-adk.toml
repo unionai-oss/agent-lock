@@ -1,0 +1,8 @@
+# Framework profile: Google Agent Development Kit.
+id = "google-adk"
+name = "Google ADK"
+kind = "framework"
+aliases = ["adk"]
+vendor = "Google"
+homepage = "https://google.github.io/adk-docs/"
+packages = ["pypi:google-adk"]

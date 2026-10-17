@@ -1,0 +1,22 @@
+# Runtime profile: LM Studio (lms CLI).
+id = "lmstudio"
+name = "LM Studio"
+aliases = ["lm-studio", "lms"]
+homepage = "https://lmstudio.ai"
+binaries = ["lms"]
+ports = [1234]
+provider-names = ["lmstudio", "lm-studio"]
+pull = "lms get {model} --yes"
+serve = "lms server start"
+
+[models]
+layout = "publisher-repo"
+dirs = ["~/.lmstudio/models", "~/.cache/lm-studio/models"]
+
+[[install]]
+method = "brew-cask"
+package = "lm-studio"
+[[install]]
+method = "app"
+path-hints = ["/LM Studio.app/", "/.lmstudio/bin/", "/.cache/lm-studio/bin/"]
+command = "Download LM Studio from https://lmstudio.ai, then run: npx lmstudio install-cli"

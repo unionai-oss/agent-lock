@@ -23,9 +23,19 @@ from rich.text import Text
 from rich.theme import Theme
 from rich.tree import Tree
 
-from harness_lock import LOCK_VERSION, Lockfile, Manifest, __version__, load
+from harness_lock import (
+    LOCK_VERSION,
+    Lockfile,
+    Manifest,
+    __version__,
+    harness_profile,
+    harnesses,
+    load,
+    runtimes,
+)
 from harness_lock import optimize as al_optimize
 from harness_lock import resolve as _resolve
+from harness_lock import select_harness as _select_harness
 from harness_lock import upgrade as al_upgrade
 
 MANIFEST = "harness.toml"
@@ -56,6 +66,7 @@ click.rich_click.MAX_WIDTH = 100
 click.rich_click.COMMAND_GROUPS = {
     "hlock": [
         {"name": "Lock", "commands": ["init", "resolve", "check"]},
+        {"name": "Harness", "commands": ["harness", "runtime"]},
         {"name": "Inspect", "commands": ["show", "tree", "backend"]},
         {"name": "Run & evolve", "commands": ["run", "upgrade", "optimize"]},
     ]
@@ -79,6 +90,10 @@ def _hint_for(message: str) -> str | None:
         return f"check that [key]\\[tasks] packs[/] in [path]{MANIFEST}[/] point at a directory with a pack.toml"
     if "task pack" in message:
         return f"check the [key]\\[tasks] packs[/] paths in [path]{MANIFEST}[/]"
+    if "unknown harness" in message:
+        return "list the known harnesses with [cmd]hlock harness list[/]"
+    if "several harnesses are installed" in message or "no supported harness" in message:
+        return f"pass [cmd]--harness <name>[/] or set [key]\\[target] harness[/] in [path]{MANIFEST}[/]"
     if "python worker" in message:
         return "set [key]HL_PYTHON[/] to an interpreter that has hlock installed"
     return None
@@ -136,7 +151,8 @@ def _kv_table() -> Table:
 def _lock_panel(lf, title: str = LOCK) -> Panel:
     ev = json.loads(lf.evidence)
     stack = _kv_table()
-    stack.add_row("harness", f"[bold]{lf.harness}[/]")
+    version = f" [muted]{lf.harness_version}[/]" if lf.harness_version else ""
+    stack.add_row("harness", f"[bold]{lf.harness}[/]{version}")
     for role, spec in json.loads(lf.llm):
         stack.add_row(f"llm · {role}", f"[bold]{spec}[/]")
     stack.add_row("decision", lf.decision)
@@ -180,14 +196,29 @@ def main() -> None:
 @main.command()
 @click.option("--name", default="demo", show_default=True, help="Project name for the manifest.")
 @click.option("--pack", default="./tasks", show_default=True, help="Path to a task pack directory.")
+@click.option("--harness", "harness", default=None,
+              help="Target harness for \\[target]. [dim]\\[default: the one you're running in, if any][/]")
 @click.option("--force", is_flag=True, help="Overwrite an existing harness.toml.")
-def init(name: str, pack: str, force: bool) -> None:
+def init(name: str, pack: str, harness: str | None, force: bool) -> None:
     """Write a starter [path]harness.toml[/] manifest."""
     p = Path(MANIFEST)
     if p.exists() and not force:
         _fail(f"{MANIFEST} already exists", "pass [cmd]--force[/] to overwrite it")
-    p.write_text(_default_manifest(name, pack))
+    target = None
+    if harness:
+        with _friendly_errors():
+            target = json.loads(_select_harness(harness))
+    else:
+        # Only an unambiguous signal (running inside a harness) picks one silently.
+        try:
+            sel = json.loads(_select_harness())
+            target = sel if sel["reason"] == "running inside it" else None
+        except ValueError:
+            target = None
+    p.write_text(_default_manifest(name, pack, target["id"] if target else None))
     _ok(f"wrote [path]{p}[/]  [muted](project {name!r}, task pack {pack})[/]")
+    if target:
+        console.print(f"[key]target[/] [bold]{target['id']}[/]  [muted]({target['reason']})[/]")
     if not (Path(pack) / "pack.toml").exists():
         console.print(f"[warn]![/] no [path]pack.toml[/] found in [path]{pack}[/]; add one before resolving")
     _next("hlock resolve")
@@ -196,13 +227,30 @@ def init(name: str, pack: str, force: bool) -> None:
 @main.command()
 @click.option("--backend", default=None, type=click.Choice(["local", "devbox", "cluster"]),
               help="Override the manifest's \\[backend] target.")
+@click.option("--harness", "harness", default=None,
+              help="Target harness, overriding \\[target] harness (e.g. claude, codex, pi, opencode).")
 @click.option("--workdir", default=None, help="Where to put trial artifacts.  [dim]\\[default: .harnesslock][/]")
-def resolve(backend: str | None, workdir: str | None) -> None:
+def resolve(backend: str | None, harness: str | None, workdir: str | None) -> None:
     """Tune the search space and write [path]harness.lock[/]."""
     with _working(f"Resolving {MANIFEST} on the {backend or 'configured'} backend…"):
-        lf = _resolve(MANIFEST, backend=backend, workdir=workdir or ".harnesslock")
+        lf = _resolve(MANIFEST, backend=backend, workdir=workdir or ".harnesslock", harness=harness)
     _ok(f"wrote [path]{LOCK}[/]")
     console.print(_lock_panel(lf))
+    lock = json.loads(lf.to_json())
+    adapter = (lock.get("harness") or {}).get("adapter")
+    if adapter and adapter != lf.harness:
+        console.print(
+            f"[warn]![/] trials ran on the [bold]{adapter}[/] adapter; native {lf.harness} execution "
+            "isn't built yet, so the evidence is a stand-in"
+        )
+    if harness:
+        with _friendly_errors():
+            m = Manifest.load(MANIFEST)
+        if m.target_harness is None or json.loads(_select_harness(m.target_harness))["id"] != lf.harness:
+            console.print(
+                f"[warn]![/] --harness isn't recorded in [path]{MANIFEST}[/]; add "
+                f'[key]\\[target] harness = "{lf.harness}"[/] so [cmd]hlock check[/] can enforce it'
+            )
     _next("hlock check", 'hlock run "<prompt>"')
 
 
@@ -236,6 +284,17 @@ def check() -> None:
         err_console.print(grid)
         err_console.print("  [muted]hint:[/] re-lock with [cmd]hlock resolve[/], then commit both files")
         sys.exit(1)
+    if m.target_harness:
+        with _friendly_errors():
+            want = json.loads(_select_harness(m.target_harness))["id"]
+        if want != lf.harness:
+            _fail(f"{LOCK} is for harness {lf.harness!r} but {MANIFEST} targets {want!r}",
+                  "re-lock with [cmd]hlock resolve[/]")
+    if lf.harness_version:
+        probe = json.loads(harness_profile(lf.harness))["probe"] if _known_harness(lf.harness) else None
+        if probe and probe["installed"] and probe.get("version") and probe["version"] != lf.harness_version:
+            _fail(f"installed {lf.harness} is {probe['version']}, {LOCK} pins {lf.harness_version}",
+                  f"install {lf.harness} {lf.harness_version}, or re-lock with [cmd]hlock resolve[/]")
     _ok(f"[path]{LOCK}[/] matches [path]{MANIFEST}[/]  [muted]{live.split(':', 1)[-1][:12]}[/]")
 
 
@@ -364,6 +423,146 @@ def optimize(depth: str, data: str, harness: str | None, out: str, strict: bool,
         _next("hlock optimize --apply")
 
 
+def _known_harness(name: str) -> bool:
+    try:
+        _select_harness(name)
+        return True
+    except ValueError:
+        return False
+
+
+def _support_badge(support: str) -> str:
+    return "[ok]full[/]" if support == "full" else "[muted]basic[/]"
+
+
+@main.group()
+def harness() -> None:
+    """Inspect the agent harnesses hlock knows about (Claude Code, Codex, Pi, …)."""
+
+
+@harness.command("list")
+@click.option("--json", "as_json", is_flag=True, help="Print the list as JSON.")
+def harness_list(as_json: bool) -> None:
+    """List known harnesses and what's installed on this machine.
+
+    [bold]cli[/] harnesses are agent CLIs, [bold]framework[/] harnesses are agent libraries a
+    project builds on, and [bold]custom[/] harnesses come from [key]\\[harnesses.<id>][/] in
+    [path]harness.toml[/].
+    """
+    with _working("Probing installed harnesses…"):
+        rows = json.loads(harnesses())
+    if as_json:
+        console.print_json(data=rows)
+        return
+    for kind, title in (("cli", "Agent CLIs"), ("framework", "Frameworks"), ("custom", f"Project harnesses ({MANIFEST})")):
+        group = [r for r in rows if r["kind"] == kind]
+        if not group:
+            continue
+        t = Table(box=None, header_style="bold", pad_edge=False, title=title, title_justify="left",
+                  title_style="bold")
+        t.add_column("")
+        t.add_column("harness", style="key", no_wrap=True)
+        t.add_column("installed", no_wrap=True)
+        t.add_column("source", style="muted", overflow="fold")
+        if kind == "cli":
+            t.add_column("support")
+        for r in group:
+            p = r["probe"]
+            installed = f"[bold]{p.get('version') or 'yes'}[/]" if p["installed"] else "[muted]—[/]"
+            cells = ["[ok]●[/]" if p["active"] else "", r["id"], installed, p.get("source") or ""]
+            if kind == "cli":
+                cells.append(_support_badge(r["support"]))
+            t.add_row(*cells)
+        console.print(t)
+        console.print()
+    active = next((r for r in rows if r["probe"]["active"]), None)
+    if active:
+        console.print(f"[ok]●[/] [muted]you're running inside {active['name']}[/]")
+    _next("hlock harness show <name>")
+
+
+@harness.command("show")
+@click.argument("name", required=False)
+@click.option("--json", "as_json", is_flag=True, help="Print the profile as JSON.")
+def harness_show(name: str | None, as_json: bool) -> None:
+    """Show a harness profile and the paths it reads on this machine.
+
+    NAME defaults to the target harness (see [cmd]hlock harness list[/]).
+    """
+    with _friendly_errors():
+        if name is None:
+            name = json.loads(_select_harness(None, _manifest_target()))["id"]
+        info = json.loads(harness_profile(name))
+    if as_json:
+        console.print_json(data=info)
+        return
+    prof, probe, paths = info["profile"], info["probe"], info["paths"]
+    t = _kv_table()
+    t.add_row("id", f"[bold]{prof['id']}[/]  [muted]{', '.join(prof['aliases'])}[/]")
+    t.add_row("kind", prof["kind"] + (f"  [muted](framework {prof['framework']})[/]" if prof.get("framework") else ""))
+    if prof["kind"] == "cli":
+        t.add_row("support", _support_badge(prof["support"]))
+    run = prof.get("run") or {}
+    if run.get("entrypoint"):
+        t.add_row("entrypoint", f"[bold]{run['entrypoint']}[/]")
+    if run.get("command"):
+        t.add_row("command", " ".join(run["command"]))
+    for pkg in prof.get("packages") or []:
+        have = (probe.get("packages") or {}).get(pkg)
+        t.add_row("package", f"{pkg}  " + (f"[bold]{have}[/]" if have else "[muted]not installed[/]"))
+    if prof["kind"] == "cli":
+        if probe["installed"]:
+            t.add_row("installed", f"[bold]{probe.get('version') or '?'}[/]  [muted]{probe.get('binary')}[/]")
+            t.add_row("source", probe.get("source") or "[muted]unknown install method[/]")
+        else:
+            t.add_row("installed", "[muted]no[/]")
+        root_env = info.get("isolation_env")
+        relocate = f"  [muted](${root_env})[/]" if root_env else ""
+        t.add_row("config root", f"[path]{paths['config_root']}[/]{relocate}")
+    for fid, f in paths["files"].items():
+        mark = "" if f["exists"] else "  [muted](missing)[/]"
+        t.add_row(f"file · {fid}", f"{f['path']}{mark}")
+    for d in paths["skills"]:
+        mark = "" if d["exists"] else "  [muted](missing)[/]"
+        t.add_row("skills", f"{d['path']}{mark}")
+    t.add_row("profile", "[muted]built in[/]" if prof["origin"] == "builtin" else f"[path]{prof['origin']}[/]")
+    console.print(Panel(t, title=f"[brand]{prof['name']}[/]", title_align="left", border_style="magenta",
+                        expand=False, padding=(1, 2)))
+
+
+@main.group()
+def runtime() -> None:
+    """Inspect local inference runtimes (Ollama, LM Studio, vLLM, …)."""
+
+
+@runtime.command("list")
+@click.option("--json", "as_json", is_flag=True, help="Print the list as JSON.")
+def runtime_list(as_json: bool) -> None:
+    """List known inference runtimes and what's installed on this machine."""
+    with _working("Probing inference runtimes…"):
+        rows = json.loads(runtimes())
+    if as_json:
+        console.print_json(data=rows)
+        return
+    t = Table(box=None, header_style="bold", pad_edge=False)
+    t.add_column("runtime", style="key")
+    t.add_column("installed")
+    t.add_column("port", style="muted")
+    t.add_column("models dir", style="muted")
+    for r in rows:
+        p = r["probe"]
+        installed = f"[bold]{p.get('version') or 'yes'}[/]" if p["installed"] else "[muted]—[/]"
+        t.add_row(r["id"], installed, ", ".join(str(x) for x in r["ports"]), r.get("models_dir") or "")
+    console.print(t)
+
+
+def _manifest_target() -> str | None:
+    try:
+        return Manifest.load(MANIFEST).target_harness
+    except ValueError:
+        return None
+
+
 @main.group()
 def backend() -> None:
     """Inspect the tuning backend."""
@@ -391,11 +590,17 @@ def backend_status() -> None:
     console.print(t)
 
 
-def _default_manifest(name: str, pack: str) -> str:
+def _default_manifest(name: str, pack: str, target: str | None = None) -> str:
+    target_block = (
+        f'[target]\nharness = "{target}"            # the harness this lock is for\n'
+        if target
+        else '# [target]\n# harness = "claude-code"      # the harness this lock is for (see: hlock harness list)\n'
+    )
     return f"""# hlock manifest — declare what the resolver may try and what 'best' means.
 [project]
 name = "{name}"
 
+{target_block}
 [tasks]
 packs = ["{pack}"]
 seeds = 2
