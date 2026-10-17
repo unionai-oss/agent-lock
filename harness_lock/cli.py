@@ -168,7 +168,7 @@ def _lock_panel(lf, title: str = LOCK) -> Panel:
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 @click.version_option(__version__, "-V", "--version", prog_name="hlock")
 def main() -> None:
-    """[brand]hlock[/] · make your agent harness setup pinnable and portable.
+    """[brand]hlock[/] · make your agent harness setup pinnable, portable, and tunable.
 
     Tune your agent stack against your own tasks, then pin the winner in a
     [path]harness.lock[/].

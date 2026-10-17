@@ -1,0 +1,57 @@
+# AGENTS.md
+
+Instructions for coding agents working in this repository. Humans: see the
+[contributing guide](https://unionai-oss.github.io/hlock/project/contributing/).
+
+## What this is
+
+hlock (published as `hlock` and `harness-lock`) tunes an agent stack against a task
+pack and pins the winner in `harness.lock`. A Rust core (`crates/harness-lock-core`)
+does the deterministic work. A Python package (`harness_lock/`) provides PyO3
+bindings, the `hlock` CLI, and a worker for heavy stages. See
+`docs/concepts/architecture.md`.
+
+## Setup and checks
+
+```bash
+uv sync                                              # build the extension, install dev tools
+uv run pytest                                        # Python bindings, CLI, worker
+uv run ruff check harness_lock tests packaging/hlock
+cargo test -p harness-lock-core                      # Rust core
+uv run --group docs zensical build --clean           # docs, if you touched docs/
+```
+
+`uv run` rebuilds the Rust extension when Rust sources change. Run all checks before
+you report a change as done, and report failures as they are.
+
+## Layout
+
+| Path | Contents |
+|---|---|
+| `crates/harness-lock-core/` | Rust core: manifest, lockfile, store, task packs, search, resolver (`tuner`) |
+| `crates/harness-lock-py/` | PyO3 bindings (ships only in the wheel) |
+| `crates/harness-lock/`, `crates/hlock/` | Re-export crates |
+| `harness_lock/cli.py` | The `hlock` CLI (rich + rich-click) |
+| `harness_lock/tasks/worker.py` | Worker for the `devbox` and `cluster` backends (versioned JSON contract) |
+| `tests/` | pytest suites |
+| `docs/`, `zensical.toml` | Documentation site |
+| `tasks/` | Demo task pack |
+| `SPEC.md` | Full design, including unbuilt features |
+
+## Rules
+
+- Keep changes focused on the task. Mention unrelated problems instead of fixing them.
+- Match the surrounding code's style, naming, and comment density. The Rust code
+  isn't rustfmt-formatted; don't run `cargo fmt` over files you aren't changing.
+- Add or update tests with every behavior change.
+- Update `docs/` when user-visible behavior changes. Docs describe what the code does
+  today; planned features belong in `SPEC.md`.
+- Run any command or code example you add to the docs, and use its real output.
+- After changing CLI output, run `uv run python scripts/cli_screenshot.py`.
+- Don't hand-edit generated files: `harness.lock`, `uv.lock`,
+  `docs/assets/quickstart.svg`.
+- Don't bump versions or edit release workflows unless asked. Versions are set with
+  `scripts/set_version.py`.
+- Keep the worker contract in sync: `CONTRACT_VERSION` in
+  `harness_lock/tasks/worker.py` and `crates/harness-lock-core/src/worker.rs`.
+- In pull requests, say that an agent made the change.

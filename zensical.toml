@@ -5,7 +5,7 @@
 
 [project]
 site_name = "hlock"
-site_description = "Make your agent harness setup pinnable and portable. Tune your agent stack against your own tasks, then pin the winner in a harness.lock."
+site_description = "Make your agent harness setup pinnable, portable, and tunable. Tune your agent stack against your own tasks, then pin the winner in a harness.lock."
 site_url = "https://unionai-oss.github.io/hlock/"
 site_author = "Union.ai"
 repo_url = "https://github.com/unionai-oss/hlock"
@@ -41,6 +41,7 @@ nav = [
   ] },
   { "Project" = [
     "project/development.md",
+    "project/contributing.md",
     "project/releasing.md",
     { "Design spec" = "https://github.com/unionai-oss/hlock/blob/main/SPEC.md" },
   ] },

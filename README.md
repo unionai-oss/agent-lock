@@ -4,7 +4,7 @@
 
 # hlock
 
-### Make your agent harness setup pinnable and portable.
+### Make your agent harness setup pinnable, portable, and tunable.
 
 **Tune your agent stack against your own tasks, then pin the winner in a `harness.lock`.**
 
@@ -153,7 +153,7 @@ uv run --group docs zensical serve # docs at http://localhost:8000
 
 `uv run` rebuilds the extension automatically when Rust sources change.
 
-Releases are cut from tags. See [RELEASING.md](https://github.com/unionai-oss/hlock/blob/main/RELEASING.md).
+Want to help? See the [contributing guide](https://unionai-oss.github.io/hlock/project/contributing/). Releases are cut from tags. See [RELEASING.md](https://github.com/unionai-oss/hlock/blob/main/RELEASING.md).
 
 ## Status
 

@@ -4,7 +4,7 @@
 $ hlock --help
  Usage: hlock [OPTIONS] COMMAND [ARGS]...
 
- hlock · make your agent harness setup pinnable and portable.
+ hlock · make your agent harness setup pinnable, portable, and tunable.
 ```
 
 Every command works on `harness.toml` and `harness.lock` in the current directory.
