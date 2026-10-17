@@ -4,3 +4,18 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Table headers: a tinted band with an accent rule, so they read as headers at a glance. */
+.md-typeset table:not([class]) th {
+  background-color: color-mix(in srgb, var(--md-primary-fg-color) 18%, transparent);
+  border-bottom: 2px solid var(--md-primary-fg-color);
+  color: var(--md-default-fg-color);
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.md-typeset table:not([class]) th code {
+  text-transform: none;
+  letter-spacing: normal;
+}

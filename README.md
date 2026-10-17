@@ -98,36 +98,9 @@ print(agent.run("clean ./data/orders.csv"))   # {"success": true, "model": "qwen
 
 ## How it works
 
-```mermaid
-flowchart LR
-    subgraph inputs["You declare"]
-        direction TB
-        M["📄 harness.toml<br/><sub>candidates · objective · budget</sub>"]
-        T["🧪 task packs<br/><sub>prompts · fixtures · graders</sub>"]
-    end
-
-    subgraph tuner["hlock resolve"]
-        direction TB
-        S["search<br/><sub>LLMs × decision × harness × policy</sub>"]
-        E["evaluate<br/><sub>run every trial on your tasks</sub>"]
-        P["select<br/><sub>Pareto front + constraints</sub>"]
-        S --> E --> P
-    end
-
-    L["🔒 harness.lock<br/><sub>pinned · hashed · with evidence</sub>"]
-
-    subgraph use["You ship"]
-        direction TB
-        C["✅ hlock check<br/><sub>CI drift gate</sub>"]
-        R["▶️ hlock run<br/><sub>the pinned stack</sub>"]
-    end
-
-    M --> S
-    T --> E
-    P --> L
-    L --> C
-    L --> R
-```
+<p align="center">
+  <img src="https://raw.githubusercontent.com/unionai-oss/hlock/main/docs/assets/how-it-works.svg" alt="How hlock works: harness.toml and task packs feed hlock resolve (search, evaluate, select), which writes harness.lock for hlock check and hlock run" width="860">
+</p>
 
 ## Architecture
 
@@ -135,27 +108,9 @@ A Rust core does all the deterministic work. Anything that needs the Python ML
 ecosystem or a GPU runs in a Python worker, which can lift each piece of work to a
 Flyte task on a cluster.
 
-```mermaid
-flowchart TB
-    subgraph py["🐍 Python  ·  pip install hlock"]
-        direction LR
-        CLI["hlock CLI"]
-        API["import hlock"]
-    end
-
-    subgraph core["🦀 harness-lock-core  ·  Rust"]
-        direction LR
-        MF["manifest"] ~~~ LK["lockfile"] ~~~ ST["store"] ~~~ TP["task packs"] ~~~ SR["search"] ~~~ TU["tuner"]
-    end
-
-    py -- "PyO3 bindings" --> core
-
-    core -- "backend = local" --> LOCAL["⚡ in-process reference harness<br/><sub>deterministic · offline · CI-friendly</sub>"]
-    core -- "backend = devbox / cluster<br/><sub>versioned JSON contract</sub>" --> W["🐍 Python worker<br/><sub>harness_lock.tasks.worker</sub>"]
-
-    W --> HEAVY["real LLM calls · trace loading · synthetic data<br/>grading · prompt search · LoRA fine-tuning"]
-    W -. "optional" .-> FLYTE["☁️ Flyte / Union tasks<br/><sub>CPU + GPU images · caching · lineage</sub>"]
-```
+<p align="center">
+  <img src="https://raw.githubusercontent.com/unionai-oss/hlock/main/docs/assets/architecture.svg" alt="hlock architecture: Python CLI and API over a Rust core via PyO3; local runs in process, devbox and cluster hand work to a Python worker that can lift stages to Flyte or Union tasks" width="860">
+</p>
 
 | Path | What lives there |
 |---|---|
