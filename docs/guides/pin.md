@@ -95,3 +95,8 @@ measures a search space against your tasks. `pin` won't overwrite a resolved loc
 `-o pinned.lock` to keep both, or `--force` to replace it.
 
 `hlock show` and `hlock tree` render either kind.
+
+## Next: rehydrate it
+
+[`hlock sync`](sync.md) restores a pinned setup on another machine, in an isolated directory,
+or in a Docker image.

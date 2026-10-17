@@ -6,6 +6,8 @@ aliases = ["codex-cli", "openai-codex"]
 vendor = "OpenAI"
 homepage = "https://developers.openai.com/codex/cli"
 support = "full"
+open-source = true
+local-models = true
 binaries = ["codex"]
 version = { args = ["--version"] }
 active-env = ["CODEX_THREAD_ID", "CODEX_SANDBOX", "CODEX_MANAGED_BY_NPM", "CODEX_MANAGED_BY_BUN"]
@@ -36,6 +38,7 @@ base-url = ["/base_url"]
 [mcp]
 sources = ["config#/mcp_servers"]
 write = "config#/mcp_servers"
+shape = "codex"
 
 [skills]
 dirs = ["{root}/skills", "~/.agents/skills", ".agents/skills", ".codex/skills"]
@@ -44,3 +47,8 @@ builtin-dirs = ["{root}/skills/.system"]
 
 [launch]
 model-flag = "--model"
+
+# How `hlock localize` points this harness at a local OpenAI-compatible endpoint.
+[[local-provider]]
+file = "config"
+set = { "/model_providers/{provider}" = { name = "{provider} (local)", base_url = "{base_url}", wire_api = "chat" }, "/model_provider" = "{provider}", "/model" = "{model}" }

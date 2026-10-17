@@ -128,7 +128,7 @@ pub fn render_config(v: &Value, format: &str) -> std::result::Result<String, Str
     }
 }
 
-fn drop_nulls(v: &Value) -> Value {
+pub(crate) fn drop_nulls(v: &Value) -> Value {
     match v {
         Value::Object(m) => Value::Object(m.iter().filter(|(_, v)| !v.is_null()).map(|(k, v)| (k.clone(), drop_nulls(v))).collect()),
         Value::Array(a) => Value::Array(a.iter().filter(|v| !v.is_null()).map(drop_nulls).collect()),
@@ -321,21 +321,21 @@ impl Secrets {
 
     /// Redact a string if its key or its shape says it's a secret; URLs get their
     /// credential-bearing query parameters and userinfo redacted.
-    fn scrub(&mut self, context: &[&str], key: &str, value: &str, force: bool) -> String {
+    /// `used_by` describes where the value lives, for the lock's `[[secret]]` entry.
+    fn scrub(&mut self, context: &[&str], key: &str, value: &str, force: bool, used_by: &str) -> String {
         if value.is_empty() || is_env_ref(value) {
             return value.to_string();
         }
         if force || is_secret_key(key) || looks_secret(value) {
-            let used_by = context.join(" ");
-            return self.redact(context, &used_by, value);
+            return self.redact(context, used_by, value);
         }
         if value.contains("://") {
-            return self.scrub_url(context, value);
+            return self.scrub_url(context, value, used_by);
         }
         value.to_string()
     }
 
-    fn scrub_url(&mut self, context: &[&str], url: &str) -> String {
+    fn scrub_url(&mut self, context: &[&str], url: &str, used_by: &str) -> String {
         let (base, query) = match url.split_once('?') {
             Some((b, q)) => (b.to_string(), Some(q.to_string())),
             None => (url.to_string(), None),
@@ -348,7 +348,7 @@ impl Secrets {
                     Some((cred, hostpart)) if cred.contains(':') => {
                         let mut ctx2: Vec<&str> = context.to_vec();
                         ctx2.push("url_credentials");
-                        let ph = self.redact(&ctx2, &context.join(" "), cred);
+                        let ph = self.redact(&ctx2, &format!("{used_by} (credentials)"), cred);
                         format!("{scheme}://{ph}@{hostpart}{host}")
                     }
                     _ => base.clone(),
@@ -363,13 +363,21 @@ impl Secrets {
                 Some((k, v)) if is_secret_key(k) || looks_secret(v) => {
                     let mut ctx2: Vec<&str> = context.to_vec();
                     ctx2.push(k);
-                    let used_by = format!("{} ?{k}", context.join(" "));
-                    format!("{k}={}", self.redact(&ctx2, &used_by, v))
+                    let label = format!("{used_by} ?{k}");
+                    format!("{k}={}", self.redact(&ctx2, &label, v))
                 }
                 _ => kv.to_string(),
             })
             .collect();
         format!("{base}?{}", parts.join("&"))
+    }
+
+    /// Where a config value lives: `<file>#/<json/pointer>` for `[harness, file, keys…]`.
+    fn config_label(context: &[String]) -> String {
+        match context {
+            [_, file, rest @ ..] => format!("{file}#/{}", rest.join("/")),
+            _ => context.join("/"),
+        }
     }
 
     /// Redact secrets anywhere in a JSON value (`context` names its location).
@@ -380,8 +388,9 @@ impl Secrets {
                     let force = inherited || (is_secret_container(k) && !child.is_string());
                     context.push(k.clone());
                     if let Value::String(s) = child {
+                        let label = Self::config_label(context);
                         let ctx: Vec<&str> = context.iter().map(String::as_str).collect();
-                        *s = self.scrub(&ctx, k, s, inherited);
+                        *s = self.scrub(&ctx, k, s, inherited, &label);
                     } else {
                         self.scrub_value(context, child, force);
                     }
@@ -391,9 +400,10 @@ impl Secrets {
             Value::Array(items) => {
                 for item in items.iter_mut() {
                     if let Value::String(s) = item {
+                        let label = Self::config_label(context);
                         let ctx: Vec<&str> = context.iter().map(String::as_str).collect();
                         let key = context.last().cloned().unwrap_or_default();
-                        *s = self.scrub(&ctx, &key, s, inherited);
+                        *s = self.scrub(&ctx, &key, s, inherited, &label);
                     } else {
                         self.scrub_value(context, item, inherited);
                     }
@@ -506,7 +516,7 @@ fn vendor_tree(dir: &Path, dest: &str, out: &mut Vec<VendorFile>) -> std::result
 // --------------------------------------------------------------------------- //
 
 /// Host and port of a URL (`http://localhost:11434/v1` → `localhost`, `11434`).
-fn host_port(url: &str) -> Option<(String, Option<u16>)> {
+pub(crate) fn host_port(url: &str) -> Option<(String, Option<u16>)> {
     let rest = url.split_once("://").map(|(_, r)| r).unwrap_or(url);
     let auth = rest.split(['/', '?']).next()?;
     let auth = auth.rsplit_once('@').map(|(_, h)| h).unwrap_or(auth);
@@ -585,7 +595,7 @@ fn norm(s: &str) -> String {
 }
 
 /// Look a model up in a runtime's local store.
-fn locate_model(rt: &RuntimeProfile, model: &str, ctx: &Ctx) -> RuntimeModel {
+pub(crate) fn locate_model(rt: &RuntimeProfile, model: &str, ctx: &Ctx) -> RuntimeModel {
     let mut m = RuntimeModel { id: model.to_string(), ..Default::default() };
     let dir = rt.models_dir(ctx);
     match rt.models.layout.as_str() {
@@ -711,7 +721,8 @@ fn str_map(v: Option<&Value>, secrets: &mut Secrets, context: &[&str]) -> BTreeM
             };
             let mut c: Vec<&str> = context.to_vec();
             c.push(k);
-            out.insert(k.clone(), secrets.scrub(&c, k, &s, false));
+            let label = format!("mcp {} {k}", context.join(" "));
+            out.insert(k.clone(), secrets.scrub(&c, k, &s, false, &label));
         }
     }
     out
@@ -742,7 +753,7 @@ fn normalize_mcp(name: &str, v: &Value, scope: &str, secrets: &mut Secrets) -> O
         _ if url.is_some() && command.is_none() => "http",
         _ => "stdio",
     };
-    let args: Vec<String> = args.iter().map(|a| secrets.scrub(&ctx, "arg", a, false)).collect();
+    let args: Vec<String> = args.iter().map(|a| secrets.scrub(&ctx, "arg", a, false, &format!("mcp {name} args"))).collect();
     let env = str_map(obj.get("env").or_else(|| obj.get("environment")).or_else(|| obj.get("envs")), secrets, &ctx);
     let headers = str_map(obj.get("headers").or_else(|| obj.get("http_headers")), secrets, &[name, "header"]);
     let enabled = match (obj.get("enabled").and_then(Value::as_bool), obj.get("disabled").and_then(Value::as_bool)) {
@@ -758,7 +769,7 @@ fn normalize_mcp(name: &str, v: &Value, scope: &str, secrets: &mut Secrets) -> O
         transport: Some(transport.into()),
         command,
         args,
-        url: url.map(|u| secrets.scrub(&ctx, "url", &u, false)),
+        url: url.map(|u| secrets.scrub(&ctx, "url", &u, false, &format!("mcp {name} url"))),
         env,
         headers,
         scope: Some(scope.into()),
@@ -1010,7 +1021,7 @@ pub fn capture(profile: &HarnessProfile, reg: &Registry, ctx: &Ctx, project: Opt
             model,
             resolved_from: (!from.is_empty()).then_some(from),
             runtime: rt.map(|(r, loc)| runtime_key(r, loc, base.as_deref())),
-            endpoint: base.map(|b| secrets.scrub(&["llm", role], "url", &b, false)),
+            endpoint: base.map(|b| secrets.scrub(&["llm", role], "url", &b, false, &format!("llm {role} endpoint"))),
             ..Default::default()
         });
     }
@@ -1236,6 +1247,20 @@ fn vendor_skill(dir: &Path, vroot: &str, name: &str, s: &mut Skill, vendor: &mut
         Ok(()) => s.vendored = Some(dest),
         Err(e) => warnings.push(format!("skill {name}: {e}")),
     }
+}
+
+/// The raw MCP server entries a harness has configured right now, by name.
+pub(crate) fn live_mcp_servers(profile: &HarnessProfile, ctx: &Ctx) -> BTreeMap<String, Value> {
+    let src = Sources::new(profile, ctx);
+    let mut out = BTreeMap::new();
+    for s in &profile.mcp.sources {
+        if let Some(Value::Object(m)) = src.get(s) {
+            for (k, v) in m {
+                out.entry(k).or_insert(v);
+            }
+        }
+    }
+    out
 }
 
 // --------------------------------------------------------------------------- //

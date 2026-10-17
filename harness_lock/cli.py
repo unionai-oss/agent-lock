@@ -30,10 +30,17 @@ from harness_lock import (
     __version__,
     harness_profile,
     harnesses,
+    launch_prepare,
     load,
+    run_code_harness,
     runtimes,
+    sync_dockerfile,
+    sync_plan,
+    sync_run_step,
+    sync_skill,
 )
 from harness_lock import check_pin as _check_pin
+from harness_lock import localize as _localize
 from harness_lock import optimize as al_optimize
 from harness_lock import pin as _pin
 from harness_lock import resolve as _resolve
@@ -68,11 +75,16 @@ click.rich_click.MAX_WIDTH = 100
 click.rich_click.COMMAND_GROUPS = {
     "hlock": [
         {"name": "Lock", "commands": ["init", "resolve", "pin", "check"]},
+        {"name": "Rehydrate", "commands": ["sync", "launch"]},
         {"name": "Harness", "commands": ["harness", "runtime"]},
         {"name": "Inspect", "commands": ["show", "tree", "backend"]},
-        {"name": "Run & evolve", "commands": ["run", "upgrade", "optimize"]},
+        {"name": "Run & evolve", "commands": ["run", "upgrade", "optimize", "localize"]},
     ]
 }
+
+
+# Code harnesses and the devbox worker default to the interpreter running hlock.
+os.environ.setdefault("HL_PYTHON", sys.executable)
 
 
 def _fail(message: str, hint: str | None = None) -> None:
@@ -352,6 +364,193 @@ def pin(harness: str | None, out: str, no_vendor: bool, force: bool, as_json: bo
     _next("hlock check", "hlock sync")
 
 
+_STATUS = {"satisfied": "[ok]✓[/]", "auto": "[brand]●[/]", "manual": "[warn]○[/]"}
+MANUAL_EXIT = 3
+
+
+def _plan_table(plan: dict, verbose: bool = False) -> Table:
+    t = Table(box=None, show_header=False, pad_edge=False)
+    t.add_column(no_wrap=True)
+    t.add_column(style="key", no_wrap=True)
+    t.add_column(overflow="fold")
+    by_kind: dict[tuple[str, str], list[dict]] = {}
+    for st in plan["steps"]:
+        if st.get("optional") and st["status"] != "satisfied" and not verbose:
+            continue
+        by_kind.setdefault((st["kind"], st["status"]), []).append(st)
+    order = {"satisfied": 0, "auto": 1, "manual": 2}
+    for (kind, status), steps in sorted(by_kind.items(), key=lambda kv: order[kv[0][1]]):
+        if len(steps) > 6 and not verbose:
+            verb = {"satisfied": "match the lock", "auto": "to restore", "manual": "need you"}[status]
+            t.add_row(_STATUS[status], kind, f"{len(steps)} {kind}s {verb}")
+            continue
+        for st in steps:
+            detail = st["title"]
+            if st["status"] != "satisfied" and st.get("reason"):
+                detail += f"  [muted]{st['reason']}[/]"
+            t.add_row(_STATUS[st["status"]], kind, detail)
+    return t
+
+
+def _rel(path: str) -> str:
+    """A path relative to the working directory when it's inside it."""
+    try:
+        return str(Path(path).resolve().relative_to(Path.cwd().resolve()))
+    except ValueError:
+        return path
+
+
+def _manual_steps(plan: dict) -> list[dict]:
+    return [st for st in plan["steps"] if st["status"] == "manual" and not st.get("optional")]
+
+
+@main.command()
+@click.argument("lock", default=LOCK, required=False)
+@click.option("--plan", "plan_only", is_flag=True, help="Print the plan and change nothing.")
+@click.option("--json", "as_json", is_flag=True, help="Print the plan as JSON and change nothing.")
+@click.option("-y", "--yes", is_flag=True, help="Don't ask before running automatic steps.")
+@click.option("--install", is_flag=True, help="Let hlock run package managers (npm, brew, uv, install scripts).")
+@click.option("--pull", is_flag=True, help="Let hlock download model weights through installed runtimes.")
+@click.option("--all-models", is_flag=True, help="Include models a provider lists but no locked role uses.")
+@click.option("--prefix", default=None, help="Materialize into an isolated config root under DIR, not your real one.")
+@click.option("--docker", "docker", is_flag=True, help="Write a Docker build context and Dockerfile to .hlock/docker/<harness>.")
+@click.option("--build", is_flag=True, help="With --docker: also run docker build.")
+@click.option("--skill", "skill", is_flag=True, help="Write an Agent Skill that guides an agent through the remaining steps.")
+@click.option("--skill-dir", default=".agents/skills/hlock-rehydrate", show_default=True, help="Where --skill writes SKILL.md.")
+@click.option("--exact", is_flag=True, help="Also remove skills that aren't in the lock (moved aside, not deleted).")
+@click.option("-v", "--verbose", is_flag=True, help="List every step, including optional ones.")
+def sync(lock: str, plan_only: bool, as_json: bool, yes: bool, install: bool, pull: bool, all_models: bool,
+         prefix: str | None, docker: bool, build: bool, skill: bool, skill_dir: str, exact: bool, verbose: bool) -> None:
+    """Rehydrate the setup in [path]harness.lock[/] on this machine.
+
+    Builds a plan in which each step is [ok]✓ satisfied[/], [brand]● automatic[/] (hlock does it), or
+    [warn]○ manual[/] (hlock prints what to run and why). Automatic steps restore config, skills
+    and instruction files and install plugins through the harness's own CLI. Package
+    installs need [cmd]--install[/] and model downloads need [cmd]--pull[/]. Exits 3 while manual
+    steps remain, so it's safe to re-run until it's clean.
+    """
+    docker_dir = None
+    if docker:
+        with _friendly_errors():
+            harness_id = Lockfile.load(lock).harness
+        docker_dir = str(Path(".hlock/docker") / harness_id)
+    with _working("Planning…"):
+        plan = json.loads(sync_plan(lock, prefix=prefix, docker=docker_dir, install=install, pull=pull,
+                                    all_models=all_models, exact=exact))
+    if as_json:
+        console.print_json(data=plan)
+        return
+    where = {"home": "your config", "prefix": f"[path]{_rel(plan['root'])}[/]",
+             "docker": f"[path]{docker_dir}[/]"}[plan["mode"]]
+    console.print(f"[bold]Sync plan[/] for {plan['harness_name']} {plan.get('version') or ''} → {where}")
+    console.print(_plan_table(plan, verbose))
+
+    if skill:
+        path = Path(skill_dir) / "SKILL.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(sync_skill(json.dumps(plan), lock))
+        _ok(f"wrote [path]{path}[/]")
+        console.print("[muted]open your agent here and ask it to rehydrate the harness with the hlock-rehydrate skill[/]")
+        return
+    if plan_only:
+        return
+
+    auto = [st for st in plan["steps"] if st["status"] == "auto"]
+    if docker:
+        auto = [st for st in auto if st["kind"] in ("config", "skill", "instructions")]
+    if auto and not yes and not docker:
+        if not sys.stdin.isatty():
+            _fail(f"{len(auto)} automatic steps to run", "pass [cmd]--yes[/] to run them, or [cmd]--plan[/] to just look")
+        if not click.confirm(f"Run {len(auto)} automatic step{'s' if len(auto) != 1 else ''}?", default=True):
+            sys.exit(1)
+    failed = 0
+    groups: dict[str, list[dict]] = {}
+    for st in auto:
+        groups.setdefault(st["kind"], []).append(st)
+    for kind, steps in groups.items():
+        quiet = len(steps) > 6
+        done = 0
+        for st in steps:
+            with console.status(f"[brand]{st['title']}…[/]", spinner="dots"):
+                try:
+                    msg = sync_run_step(json.dumps(st))
+                except ValueError as e:
+                    failed += 1
+                    err_console.print(f"[fail]✗[/] {st['title']}\n  [muted]{e}[/]")
+                    continue
+            done += 1
+            if not quiet:
+                notes = []
+                if "previous:" in msg:
+                    notes.append("kept the old file as .hlock-bak")
+                if "placeholders left" in msg:
+                    notes.append("placeholders for missing secrets")
+                if st["kind"] in ("plugin", "harness", "runtime", "model", "package"):
+                    notes.append(msg)
+                console.print(f"[ok]✓[/] {st['title']}" + (f"  [muted]{'; '.join(notes)}[/]" if notes else ""))
+        if quiet and done:
+            console.print(f"[ok]✓[/] restored {done} {kind}s")
+
+    if docker:
+        files = json.loads(sync_dockerfile(json.dumps(plan), lock))
+        ctx = Path(docker_dir)
+        (ctx / "home").mkdir(parents=True, exist_ok=True)
+        (ctx / "Dockerfile").write_text(files["dockerfile"])
+        entry = ctx / "hlock-entrypoint"
+        entry.write_text(files["entrypoint"])
+        entry.chmod(0o755)
+        _ok(f"wrote [path]{ctx / 'Dockerfile'}[/]")
+        tag = f"hlock-{plan['harness']}"
+        secrets = " ".join(f"-e {st['id'].split(':', 1)[1]}" for st in plan["steps"] if st["kind"] == "secret")
+        if build:
+            import subprocess
+
+            console.print(f"[brand]docker build -t {tag} {ctx}[/]")
+            if subprocess.run(["docker", "build", "-t", tag, str(ctx)], check=False).returncode != 0:
+                _fail("docker build failed")
+            _ok(f"built [bold]{tag}[/]")
+        console.print("[muted]next →[/]")
+        if not build:
+            console.print(f"  [cmd]docker build -t {tag} {ctx}[/]", soft_wrap=True)
+        run_cmd = f"docker run -it --rm {secrets + ' ' if secrets else ''}-v \"$PWD:/workspace\" {tag}"
+        console.print(f"  [cmd]{run_cmd}[/]", soft_wrap=True)
+        sys.exit(1 if failed else 0)
+
+    remaining = _manual_steps(plan)
+    if remaining:
+        secrets = [st for st in remaining if st["kind"] == "secret"]
+        others = [st for st in remaining if st["kind"] != "secret"]
+        console.print(f"\n[warn]{len(remaining)} step{'s need' if len(remaining) != 1 else ' needs'} you:[/]")
+        for i, st in enumerate(others, 1):
+            console.print(f"  {i}. {st['title']}" + (f"  [muted]{st['reason']}[/]" if st.get("reason") else ""))
+            if st.get("command"):
+                console.print(f"     [cmd]{st['command']}[/]")
+        if secrets:
+            n = len(others) + 1
+            console.print(f"  {n}. Set {len(secrets)} secret{'s' if len(secrets) != 1 else ''}, then re-run "
+                          "[cmd]hlock sync[/] [muted](values stay out of the lock)[/]")
+            for st in secrets:
+                name, _, used = st["title"].partition(" (")
+                console.print(f"     [cmd]export {name}=…[/]  [muted]# {used.rstrip(')')}[/]")
+        hints = []
+        if any("--install" in (st.get("reason") or "") for st in remaining):
+            hints.append("hlock sync --install")
+        if any("--pull" in (st.get("reason") or "") for st in remaining):
+            hints.append("hlock sync --pull")
+        hints.append("hlock sync --skill [muted](let your agent do it)[/]")
+        _next(*hints)
+    if failed:
+        sys.exit(1)
+    if remaining:
+        sys.exit(MANUAL_EXIT)
+    if plan["mode"] == "prefix":
+        env = " ".join(f"{k}={_rel(v)}" for k, v in plan["isolation"].items())
+        _ok(f"in sync at [path]{_rel(plan['root'])}[/]")
+        console.print(f"[muted]use it:[/] [cmd]{env} {plan.get('binary') or plan['harness']}[/]", soft_wrap=True)
+    else:
+        _ok(f"in sync with [path]{lock}[/]")
+
+
 @main.command()
 @click.option("--json", "as_json", is_flag=True, help="Print the lockfile as JSON.")
 def show(as_json: bool) -> None:
@@ -465,7 +664,11 @@ def _pin_tree(lock: dict) -> Tree:
 def run(prompt: str, as_json: bool) -> None:
     """Run the locked agent on PROMPT."""
     with _friendly_errors():
+        lf = Lockfile.load(LOCK)
         agent = load(LOCK)
+    if _is_code_harness(lf.harness):
+        _run_code_harness(prompt, as_json)
+        return
     with _working("Running the locked agent…"):
         raw = agent.run(prompt)
     outcome = json.loads(raw)
@@ -479,6 +682,107 @@ def run(prompt: str, as_json: bool) -> None:
             f"[muted]cost[/] {_usd(outcome.get('cost_usd', 0))}"
         )
     sys.exit(0 if ok else 1)
+
+
+def _is_code_harness(name: str) -> bool:
+    try:
+        return json.loads(harness_profile(name))["profile"]["kind"] == "custom"
+    except ValueError:
+        return False
+
+
+def _run_code_harness(prompt: str, as_json: bool) -> None:
+    with _working("Running the locked harness…"):
+        r = json.loads(run_code_harness(prompt, LOCK))
+    if as_json:
+        console.print_json(data=r)
+    else:
+        if r.get("log"):
+            console.print(r["log"].rstrip(), markup=False, highlight=False)
+        mark = "[ok]✓ success[/]" if r["success"] else f"[fail]✗ failed[/] [muted](exit {r.get('exit_code')})[/]"
+        console.print(f"{mark}  [muted]latency[/] {_secs(r.get('latency_s'))}  [muted]cost[/] {_usd(r.get('cost_usd'))}")
+    sys.exit(0 if r["success"] else 1)
+
+
+@main.command(context_settings={"ignore_unknown_options": True, "allow_interspersed_args": False})
+@click.argument("args", nargs=-1, type=click.UNPROCESSED)
+@click.option("--lock", "lock", default=LOCK, show_default=True, help="Lock to launch.")
+@click.option("--prefix", default=None, help="Where isolated roots live.  [dim]\\[default: .hlock/env][/]")
+@click.option("--in-place", is_flag=True, help="Use your own config instead of an isolated root (same harness only).")
+@click.option("--allow-version-mismatch", is_flag=True, help="Launch even if the installed version differs from the lock.")
+@click.option("--dry-run", is_flag=True, help="Prepare everything, print the command, and don't start it.")
+@click.option("--json", "as_json", is_flag=True, help="With --dry-run: print the launch plan as JSON.")
+def launch(args: tuple[str, ...], lock: str, prefix: str | None, in_place: bool, allow_version_mismatch: bool,
+           dry_run: bool, as_json: bool) -> None:
+    """Start a session in a harness that matches the lock.
+
+    [cmd]hlock launch[/] starts the lock's harness; [cmd]hlock launch pi[/] starts another one with
+    the lock's portable parts (MCP servers, skills, instructions, model) translated for it.
+    Other arguments are passed through: [cmd]hlock launch claude --resume[/]. Put arguments
+    after [cmd]--[/] to pass one that hlock would otherwise take, like [cmd]-- --dry-run[/].
+
+    The session runs against an isolated config root in [path].hlock/env/[/], restored from
+    the lock, so it sees exactly the locked setup and none of your unlocked config.
+    """
+    # hlock's own flags count anywhere before `--`; everything else goes to the harness.
+    harness = None
+    rest: list[str] = []
+    items = list(args)
+    i = 0
+    while i < len(items):
+        a = items[i]
+        if a == "--":
+            rest.extend(items[i + 1:])
+            break
+        if a == "--dry-run":
+            dry_run = True
+        elif a == "--json":
+            as_json = True
+        elif a == "--in-place":
+            in_place = True
+        elif a == "--allow-version-mismatch":
+            allow_version_mismatch = True
+        elif a in ("--lock", "--prefix") and i + 1 < len(items):
+            if a == "--lock":
+                lock = items[i + 1]
+            else:
+                prefix = items[i + 1]
+            i += 1
+        elif harness is None and not rest and not a.startswith("-") and _known_harness(a):
+            harness = a
+        else:
+            rest.append(a)
+        i += 1
+    with _working("Preparing the locked environment…"):
+        prep = json.loads(launch_prepare(lock, harness=harness, prefix=prefix,
+                                         allow_version_mismatch=allow_version_mismatch,
+                                         in_place=in_place, args=rest))
+    if as_json:
+        console.print_json(data=prep)
+        return
+    copies = [line for line in prep["done"] if line.startswith("Copy skill")]
+    for line in prep["done"]:
+        if len(copies) <= 6 or not line.startswith("Copy skill"):
+            console.print(f"[ok]✓[/] {line}")
+    if len(copies) > 6:
+        console.print(f"[ok]✓[/] copied {len(copies)} skills")
+    for line in prep["notes"]:
+        console.print(f"[warn]![/] {line}")
+    if prep["missing_secrets"]:
+        console.print(f"[warn]![/] {len(prep['missing_secrets'])} secret(s) not set; their placeholders stay: "
+                      + ", ".join(prep["missing_secrets"]))
+    env_txt = " ".join(f"{k}={_rel(v)}" for k, v in prep["env"].items() if not k.startswith(("HLOCK_", "PYTHON")))
+    shown = " ".join(prep["argv"][:1] + [a if len(a) < 60 else a[:57] + "…" for a in prep["argv"][1:]])
+    console.print(f"[brand]▶[/] {prep['harness_name']}  [muted]{env_txt}[/] [cmd]{shown}[/]", soft_wrap=True)
+    if dry_run:
+        return
+    env = {**os.environ, **prep["env"]}
+    sys.stdout.flush()
+    sys.stderr.flush()
+    try:
+        os.execvpe(prep["argv"][0], prep["argv"], env)
+    except OSError as e:
+        _fail(f"cannot start {prep['argv'][0]}: {e}")
 
 
 @main.command()
@@ -706,6 +1010,70 @@ def _manifest_target() -> str | None:
         return Manifest.load(MANIFEST).target_harness
     except ValueError:
         return None
+
+
+@main.command()
+@click.argument("lock", default=LOCK, required=False)
+@click.option("-o", "--out", default="harness.local.lock", show_default=True, help="Where to write the localized lock.")
+@click.option("--harness", default=None, help="Local harness to use. [dim]\\[default: the lock's if local-capable, else the best installed][/]")
+@click.option("--runtime", default=None, help="Inference runtime (ollama, lmstudio, llama-cpp, …). [dim]\\[default: the best installed][/]")
+@click.option("--models", default=None, help="Comma-separated model ids to consider instead of the runtime's catalog.")
+@click.option("--memory-gb", type=float, default=None, help="Memory budget for model weights. [dim]\\[default: measured][/]")
+@click.option("--tasks", default=None, help="Task pack to evaluate candidates on. [dim]\\[default: harness.toml's, if any][/]")
+@click.option("--strict", is_flag=True, help="Drop remote MCP servers instead of flagging them.")
+@click.option("--allow-network", is_flag=True, help="Keep self-hosted runtimes on your network instead of replacing them.")
+@click.option("--json", "as_json", is_flag=True, help="Print the localize report as JSON.")
+def localize(lock: str, out: str, harness: str | None, runtime: str | None, models: str | None,
+             memory_gb: float | None, tasks: str | None, strict: bool, allow_network: bool, as_json: bool) -> None:
+    """Write an all-local equivalent of a lock to [path]harness.local.lock[/].
+
+    A proprietary harness, or one that can't use a local model, becomes a local-capable
+    one; models on API providers move to a local runtime, picked from its catalog and the
+    weights on disk to fit this machine's memory. MCP servers, skills and instructions carry
+    over. With task packs, candidates are evaluated; otherwise they're ranked.
+    """
+    model_list = [m.strip() for m in models.split(",")] if models else []
+    with _working("Localizing…"):
+        result = json.loads(_localize(lock, out, harness=harness, runtime=runtime, models=model_list,
+                                      memory_gb=memory_gb, tasks=tasks, strict=strict, allow_network=allow_network))
+    rep = result["report"]
+    if as_json:
+        console.print_json(data=rep)
+        return
+    _ok(f"wrote [path]{out}[/]  [muted](from {lock})[/]")
+    t = _kv_table()
+    h = rep["harness"]
+    inst = "" if h["installed"] else "  [warn]not installed[/]"
+    t.add_row("harness", f"[bold]{h['to']}[/]{inst}  [muted]{h['why']}[/]")
+    rt = rep["runtime"]
+    rinst = f"[bold]{rt['name']}[/] {rt.get('version') or ''}" + ("" if rt["installed"] else "  [warn]not installed[/]")
+    t.add_row("runtime", f"{rinst}  [muted]{rt['endpoint']}[/]")
+    for llm in result["lock"]["llm"]:
+        t.add_row(f"llm · {llm['role']}", f"[bold]{llm['provider']}:{llm['model']}[/]")
+    mem = rep.get("memory")
+    if mem:
+        t.add_row("memory", f"{mem['usable-gb']} GB for weights  [muted]({mem['total-gb']} GB, {mem['how']})[/]")
+    cands = rep["models"]["candidates"]
+    if cands:
+        shown = ", ".join(f"{c['id']}{' ✓' if c['present'] else ''}" for c in cands[:6])
+        t.add_row("candidates", f"{shown}  [muted](✓ on disk)[/]")
+    if rep["evaluated"]:
+        ev = result["lock"]["evidence"]
+        base = rep["baseline"]
+        sr = (ev.get("success-rate") or {}).get("mean")
+        line = f"success rate {_pct(sr)}"
+        if base.get("success-rate") is not None:
+            line += f"  [muted](source lock: {_pct(base['success-rate'])})[/]"
+        t.add_row("evidence", line)
+    else:
+        t.add_row("evidence", "[muted]not evaluated (no task packs); ranked by fit, tier, and what's on disk[/]")
+    console.print(Panel(t, title=f"[brand]🏠 {out} · localized[/]", title_align="left", border_style="magenta",
+                        expand=False, padding=(1, 2)))
+    for line in rep["replaced"]:
+        console.print(f"  [ok]~[/] {line}")
+    for line in rep["notes"]:
+        console.print(f"  [warn]![/] {line}")
+    _next(f"hlock sync {out} --pull", f"hlock launch --lock {out}")
 
 
 @main.group()

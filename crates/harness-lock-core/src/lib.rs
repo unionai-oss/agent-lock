@@ -11,6 +11,9 @@
 
 pub mod adapters;
 pub mod capture;
+pub mod contract;
+pub mod launch;
+pub mod localize;
 pub mod error;
 pub mod hash;
 pub mod lockfile;
@@ -20,6 +23,7 @@ pub mod profiles;
 pub mod providers;
 pub mod search;
 pub mod store;
+pub mod sync;
 pub mod tasks;
 pub mod tuner;
 pub mod worker;
