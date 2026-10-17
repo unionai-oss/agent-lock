@@ -631,6 +631,7 @@ fn build_optimized_resolve(
             ("tool_timeout_seconds".to_string(), serde_json::json!(stack.tool_timeout_seconds.unwrap_or(120))),
         ]),
         fingerprint: None,
+        ..Default::default()
     }];
     lf.policy = crate::lockfile::Policy {
         retries: stack.retries,

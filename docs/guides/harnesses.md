@@ -148,6 +148,48 @@ profile, whose packages are added to `packages`; `hlock harness show triage` lis
 package with the version installed in the Python that `HL_PYTHON` (or `python3`) points at.
 Project harnesses appear in `hlock harness list` and can be targeted like any other.
 
+Unlike agent CLIs, a code harness runs for real during `hlock resolve`: each trial calls its
+entrypoint, so the evidence in the lock measures your agent. `hlock run "<prompt>"` and
+`hlock launch` run it on a locked setup.
+
+### How hlock runs a code harness
+
+hlock passes everything through environment variables and runs the harness in the trial's
+workspace:
+
+| Variable | Value |
+|---|---|
+| `HLOCK_PROMPT` | The task prompt |
+| `HLOCK_MODEL` | The model as `provider:model` |
+| `HLOCK_LLM_BASE_URL` | The model's base URL, when the lock or `HL_LLM_BASE_URL` sets one |
+| `HLOCK_WORKSPACE` | The working directory for artifacts (also the current directory) |
+| `HLOCK_MCP_CONFIG` | A `{"mcpServers": …}` file for the lock's MCP servers, secrets filled from the environment |
+| `HLOCK_SKILLS_DIR` | A directory holding the lock's skills |
+| `HLOCK_LOCK` | The lockfile |
+| `HLOCK_OUTPUT` | Where the harness may write a JSON result |
+| `HLOCK_SEED`, `HLOCK_HARNESS` | The trial seed and the harness id |
+
+A `command` gets `{prompt}`, `{model}` and `{workspace}` substituted in its arguments; a
+relative executable path is relative to the project. The result is the JSON in
+`HLOCK_OUTPUT`, `{"success": true, "cost_usd": 0.01, "steps": 3, "trace": […]}`, or, without
+one, the exit code (`0` is success).
+
+An `entrypoint` is called as `fn(prompt, ctx)`, and may be `async`:
+
+```python title="triage.py"
+def run(prompt, ctx):
+    # ctx.model ("provider:model"), ctx.provider, ctx.model_name, ctx.base_url,
+    # ctx.workspace, ctx.mcp_config, ctx.skills_dir, ctx.lock, ctx.seed
+    (ctx.workspace / "summary.md").write_text(answer(prompt, ctx.model))
+    return {"output": "done", "cost_usd": 0.002}
+```
+
+Return a `dict` (merged into the result, `success` defaults to true), a `bool`, or anything
+else (recorded as `output`). An exception is a failed run. hlock runs it with `python -c`
+and a small built-in shim, so the interpreter (`python = "…"` in the table, else
+`HL_PYTHON`, else `python3`) needs only your agent's dependencies, not hlock. The project
+directory is on `PYTHONPATH`.
+
 ## Add a harness hlock doesn't know
 
 Write a profile. See [Harness profiles](harness-profiles.md).

@@ -6,6 +6,8 @@ aliases = ["copilot", "github-copilot"]
 vendor = "GitHub"
 homepage = "https://github.com/github/copilot-cli"
 support = "basic"
+open-source = false
+local-models = false
 binaries = ["copilot"]
 version = { args = ["--version"] }
 config-root = { env = "COPILOT_HOME", default = "~/.copilot" }

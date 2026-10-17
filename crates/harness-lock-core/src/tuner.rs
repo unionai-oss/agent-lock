@@ -27,6 +27,8 @@ pub struct Tuner {
     holdout: Vec<crate::tasks::Task>,
     /// Target harness from the CLI (`--harness`), overriding `[target] harness`.
     pub harness_override: Option<String>,
+    /// Code harnesses (`[harnesses.<id>]`) that trials run through their entrypoint.
+    code_harnesses: BTreeMap<String, crate::profiles::HarnessProfile>,
 }
 
 impl Tuner {
@@ -55,6 +57,7 @@ impl Tuner {
             adapter,
             holdout: Vec::new(),
             harness_override: None,
+            code_harnesses: BTreeMap::new(),
         }
     }
 
@@ -127,7 +130,11 @@ impl Tuner {
         let _ = std::fs::remove_dir_all(&ws);
         let _ = std::fs::create_dir_all(&ws);
 
-        let outcome = self.adapter.run(stack, task, &ws, seed).unwrap_or_else(|_| {
+        let outcome = match self.code_harnesses.get(&stack.harness) {
+            Some(p) => crate::contract::CommandAdapter::new(p.clone(), Ctx::from_process()).run(stack, task, &ws, seed),
+            None => self.adapter.run(stack, task, &ws, seed),
+        };
+        let outcome = outcome.unwrap_or_else(|_| {
             crate::adapters::RunOutcome {
                 success: false,
                 cost_usd: 0.0,
@@ -168,8 +175,21 @@ impl Tuner {
 
     /// Tune: enumerate, run, aggregate, select, and write `harness.lock`.
     pub fn tune(&mut self) -> Result<Lockfile> {
+        let lock = self.tune_lock()?;
+        lock.save(std::path::Path::new(crate::LOCKFILE_PATH))?;
+        Ok(lock)
+    }
+
+    /// Tune and return the winning lock without writing it.
+    pub fn tune_lock(&mut self) -> Result<Lockfile> {
         let registry = Registry::load_for(&Ctx::from_process(), Some(&self.manifest))?;
         apply_target(&mut self.manifest, self.harness_override.as_deref(), &registry)?;
+        self.code_harnesses = registry
+            .harnesses
+            .iter()
+            .filter(|h| h.kind == "custom" && (h.run.entrypoint.is_some() || !h.run.command.is_empty()))
+            .map(|h| (h.id.clone(), h.clone()))
+            .collect();
         let search_tasks = self.load_packs();
         let stacks = self.enumerate_stacks();
         let seeds = self.manifest.seeds();
@@ -219,7 +239,6 @@ impl Tuner {
         .ok_or_else(|| Error::Tuning("no viable stack found".into()))?;
 
         let lock = self.build_resolve(&winner, &scores);
-        lock.save(std::path::Path::new(crate::LOCKFILE_PATH))?;
         let _ = self.write_report(&lock, &scores);
         Ok(lock)
     }
@@ -241,6 +260,7 @@ impl Tuner {
                     resolved_from: Some(spec.clone()),
                     params: BTreeMap::new(),
                     fingerprint: Some(format!("sha256:{}", crate::hash::sha256_hex(spec.as_bytes()))),
+                    ..Default::default()
                 }
             })
             .collect();
@@ -310,7 +330,7 @@ impl Tuner {
             let probe = probe_harness(profile, &ctx);
             h.version = probe.version;
             h.source = probe.source;
-            h.adapter = Some(self.adapter.name().to_string());
+            h.adapter = Some(if self.code_harnesses.contains_key(name) { name.to_string() } else { self.adapter.name().to_string() });
         }
         h
     }

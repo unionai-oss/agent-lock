@@ -6,10 +6,12 @@ new harness, or fixing a path for an existing one, means editing a file.
 
 !!! note "What reads which fields"
 
-    Today profiles drive detection, versions and install sources, `hlock harness show`, and
-    targeting. The `model`, `providers`, `mcp`, `skills`, `bundles`, `files` and `launch`
-    fields are read by the upcoming `hlock pin`, `hlock sync` and `hlock launch` commands
-    (design: [SPEC §7.8](https://github.com/unionai-oss/hlock/blob/main/SPEC.md)).
+    Profiles drive detection, versions and install sources, `hlock harness show`, targeting,
+    [`hlock pin`](pin.md) (`model`, `providers`, `mcp`, `skills`, `bundles`, `instructions`,
+    `files`), [`hlock sync`](sync.md) (`install`, `files`, `skills.write`, `config-root`), and
+    [`hlock launch`](launch.md) (`launch`, `mcp.write`, `mcp.shape`, `instructions`, and `run`
+    for code harnesses), and [`hlock localize`](localize.md) (`open-source`, `local-models`,
+    `local-provider`, and runtime `catalog`s).
 
 ## Where profiles come from
 
@@ -83,7 +85,8 @@ value wins:
 - `env:VAR` reads an environment variable.
 - `<file>#<pointer>` reads a value from a named file in `[files]`, where `<pointer>` is a
   [JSON pointer](https://datatracker.ietf.org/doc/html/rfc6901), applied to TOML and YAML
-  files as if they were JSON.
+  files as if they were JSON. `{cwd}` inside a pointer is replaced with the escaped project
+  path (Claude Code keeps per-project MCP servers under `/projects/{cwd}/mcpServers`).
 
 Set `model.format = "provider/model"` when the model value carries its provider (OpenCode's
 `anthropic/claude-sonnet-4-5`), or `model.default-provider` when the harness only talks to one.
@@ -110,11 +113,13 @@ or `record` (a digest only, for project files that are already in git).
 | `files.<id>` | `path`, `isolated`, `format`, `restore`, `pointers` |
 | `model` | `default`, `small`, `provider`, `base-url` sources; `format`; `default-provider` |
 | `providers` | `source`, plus pointers into each provider for `base-url` and `models` |
-| `mcp` | `sources`, `write` |
+| `mcp` | `sources`, `write`, `shape` (`standard`, `opencode`, `codex`, `goose`): how `launch` writes servers |
 | `skills` | `dirs`, `write`, `builtin-dirs`, `builtin-manifest` |
 | `bundles` | Plugins/packages: `kind`, `extractor` (`claude-plugins`, `pi-packages`, `npm-list`), `source`, `lockfile` |
 | `instructions` | Instruction files the harness reads |
 | `launch` | `args`, `model-flag` |
+| `open-source`, `local-models` | Used by [`hlock localize`](localize.md) to choose local-capable harnesses |
+| `local-provider` | How `localize` points the harness at a local endpoint: a list of `{ file, set }`, where `set` maps JSON pointers to values; `{provider}`, `{model}`, `{base_url}` and `{host}` are substituted |
 | `packages` | Packages to pin for code harnesses, e.g. `pypi:pydantic-ai` |
 | `framework` | For `custom` harnesses: a framework profile to inherit packages from |
 | `run` | For code harnesses: `entrypoint`, `command`, `python`, `env` |
@@ -138,6 +143,14 @@ dirs = ["env:MYRT_MODELS", "~/.myrt/models"]
 [[install]]
 method = "brew"
 package = "myrt"
+
+[[catalog]]                             # models `hlock localize` may pick
+id = "my-coder:30b"
+params-b = 30
+min-memory-gb = 24                      # weights plus a working context
+tier = 3                                # 3 strong agentic coder, 2 capable, 1 small/fast
+tools = true                            # reliable tool calling
+roles = []                              # e.g. ["small", "decision"]; empty means any
 ```
 
 ## Project harnesses

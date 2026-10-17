@@ -6,6 +6,8 @@ aliases = ["claude"]
 vendor = "Anthropic"
 homepage = "https://code.claude.com"
 support = "full"
+open-source = false
+local-models = true
 binaries = ["claude"]
 version = { args = ["--version"] }
 active-env = ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"]
@@ -50,7 +52,7 @@ default-provider = "anthropic"
 base-url = ["env:ANTHROPIC_BASE_URL", "settings#/env/ANTHROPIC_BASE_URL"]
 
 [mcp]
-sources = ["state#/mcpServers", "project-mcp#/mcpServers"]
+sources = ["state#/mcpServers", "state#/projects/{cwd}/mcpServers", "project-mcp#/mcpServers"]
 write = "state#/mcpServers"
 
 [skills]
