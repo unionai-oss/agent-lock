@@ -6,6 +6,8 @@ aliases = ["ampcode", "sourcegraph-amp"]
 vendor = "Sourcegraph"
 homepage = "https://ampcode.com"
 support = "basic"
+open-source = false
+local-models = false
 binaries = ["amp"]
 version = { args = ["--version"] }
 config-root = { env = "XDG_CONFIG_HOME", suffix = "amp", default = "~/.config/amp" }

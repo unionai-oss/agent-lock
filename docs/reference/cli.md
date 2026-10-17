@@ -18,6 +18,7 @@ Failures print a one-line error with a hint and exit `1`.
 | [`pin`](#pin) | Pin your current harness setup into `harness.lock` |
 | [`check`](#check) | Fail if `harness.toml` has drifted from `harness.lock`, or a pinned setup changed |
 | [`sync`](#sync) | Rehydrate the setup in a lock on this machine, in a prefix, or in a Docker image |
+| [`launch`](#launch) | Start a harness session that matches the lock |
 | [`show`](#show) | Show the locked stack and its evidence |
 | [`tree`](#tree) | Print the locked component graph |
 | [`harness list`](#harness-list) | List known harnesses and what's installed |
@@ -27,6 +28,7 @@ Failures print a one-line error with a hint and exit `1`.
 | [`run`](#run) | Run the locked agent on a prompt |
 | [`upgrade`](#upgrade) | Plan, apply, or roll back component upgrades |
 | [`optimize`](#optimize) | Tune prompts, hyperparameters, and small models into `harness.opt.lock` |
+| [`localize`](#localize) | Write an all-local equivalent of a lock |
 
 Global options: `-V`/`--version` and `-h`/`--help`.
 
@@ -124,6 +126,28 @@ hlock sync [LOCK] [OPTIONS]
 Exits `0` when everything matches, `3` while manual steps remain, and `1` if an automatic
 step fails.
 
+## `launch`
+
+Verify the installed harness, restore the lock into an isolated config root under
+`.hlock/env/`, and start the harness there. Naming a different harness translates the lock's
+portable parts into it. See [Launching a locked harness](../guides/launch.md).
+
+```bash
+hlock launch [HARNESS] [OPTIONS] [-- HARNESS_ARGS...]
+```
+
+| Option | Description |
+|---|---|
+| `HARNESS` | Harness to start (default: the lock's) |
+| `--lock FILE` | Lock to launch (default `harness.lock`) |
+| `--prefix DIR` | Where isolated roots live (default `.hlock/env`) |
+| `--in-place` | Use your own config instead of an isolated root (same harness only) |
+| `--allow-version-mismatch` | Start even if the installed version differs from the lock |
+| `--dry-run` | Prepare everything and print the command without starting it |
+| `--json` | With `--dry-run`, print the launch plan as JSON |
+
+Other arguments are passed to the harness. hlock's own options count anywhere before `--`.
+
 ## `show`
 
 Print the locked stack (harness, models by role, decision model, backend) and the
@@ -188,7 +212,9 @@ hlock backend status
 ## `run`
 
 Load `harness.lock` and run the locked stack on `PROMPT`. Exits `0` when the task
-succeeds and `1` when it fails.
+succeeds and `1` when it fails. For a [code harness](../guides/harnesses.md#how-hlock-runs-a-code-harness),
+`run` calls its entrypoint or command; `--json` then prints `success`, `output`, `cost_usd`,
+`latency_s`, `exit_code` and the captured `log`.
 
 ```bash
 hlock run PROMPT [--json]
@@ -200,8 +226,8 @@ hlock run PROMPT [--json]
 
 !!! note "v0.1"
 
-    `run` executes the locked model on the offline reference provider. Running real
-    providers and harnesses from the lock is on the roadmap.
+    For agent CLIs and the reference harness, `run` executes the locked model on the offline
+    reference provider. To work in a locked agent CLI, use [`launch`](#launch).
 
 ## `upgrade`
 
@@ -241,6 +267,28 @@ hlock optimize [--depth LEVEL] [--data SOURCE] [OPTIONS]
 | `--max-trials N` | | Cap the number of trials |
 | `--backend` | manifest `[backend] target` | `local`, `devbox`, or `cluster` |
 | `--workdir DIR` | `.harnesslock` | Where trial artifacts go |
+
+## `localize`
+
+Replace a lock's proprietary harness and API models with local equivalents, and write the
+result to a new lock. See [Going local with localize](../guides/localize.md).
+
+```bash
+hlock localize [LOCK] [OPTIONS]
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `LOCK` | `harness.lock` | Lock to localize |
+| `-o`, `--out` | `harness.local.lock` | Where to write the localized lock |
+| `--harness` | the lock's, if local-capable, else the best installed | Local harness to use |
+| `--runtime` | the best installed | `ollama`, `lmstudio`, `llama-cpp`, `mlx-lm`, `vllm`, … |
+| `--models` | the runtime's catalog and weights on disk | Comma-separated model ids to consider |
+| `--memory-gb` | measured | Memory budget for model weights |
+| `--tasks` | `harness.toml`'s task packs | Task pack to evaluate candidates on |
+| `--strict` | | Drop remote MCP servers instead of flagging them |
+| `--allow-network` | | Keep self-hosted runtimes on your network |
+| `--json` | | Print the localize report as JSON |
 
 ## Exit codes
 

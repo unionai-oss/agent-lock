@@ -6,6 +6,8 @@ aliases = ["claude"]
 vendor = "Anthropic"
 homepage = "https://code.claude.com"
 support = "full"
+open-source = false
+local-models = true
 binaries = ["claude"]
 version = { args = ["--version"] }
 active-env = ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"]

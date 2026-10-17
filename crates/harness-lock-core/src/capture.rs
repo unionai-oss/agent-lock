@@ -128,7 +128,7 @@ pub fn render_config(v: &Value, format: &str) -> std::result::Result<String, Str
     }
 }
 
-fn drop_nulls(v: &Value) -> Value {
+pub(crate) fn drop_nulls(v: &Value) -> Value {
     match v {
         Value::Object(m) => Value::Object(m.iter().filter(|(_, v)| !v.is_null()).map(|(k, v)| (k.clone(), drop_nulls(v))).collect()),
         Value::Array(a) => Value::Array(a.iter().filter(|v| !v.is_null()).map(drop_nulls).collect()),
@@ -1247,6 +1247,20 @@ fn vendor_skill(dir: &Path, vroot: &str, name: &str, s: &mut Skill, vendor: &mut
         Ok(()) => s.vendored = Some(dest),
         Err(e) => warnings.push(format!("skill {name}: {e}")),
     }
+}
+
+/// The raw MCP server entries a harness has configured right now, by name.
+pub(crate) fn live_mcp_servers(profile: &HarnessProfile, ctx: &Ctx) -> BTreeMap<String, Value> {
+    let src = Sources::new(profile, ctx);
+    let mut out = BTreeMap::new();
+    for s in &profile.mcp.sources {
+        if let Some(Value::Object(m)) = src.get(s) {
+            for (k, v) in m {
+                out.entry(k).or_insert(v);
+            }
+        }
+    }
+    out
 }
 
 // --------------------------------------------------------------------------- //
