@@ -1304,9 +1304,12 @@ status:
 | `manual` | needs the user: install a runtime or app (`brew install ollama`, the LM Studio app), sign in, provide a secret. hlock prints the exact command or link and why it's needed |
 
 `hlock sync` runs the `auto` steps (after confirming, or with `--yes`), then ends with the
-remaining manual steps and exits `2` while any are left; it's safe to re-run until it's clean.
+remaining manual steps and exits `3` while any are left (`2` is taken by usage errors); it's
+safe to re-run until it's clean.
 Options:
 
+- `--install` and `--pull`: opt in to package-manager installs and model downloads, which
+  are otherwise manual steps with the exact command.
 - `--plan` (and `--json`): print the plan without changing anything, for people, scripts and
   agents.
 - `--skill [DIR]`: write an Agent Skill (`hlock-rehydrate/SKILL.md`) generated from the lock

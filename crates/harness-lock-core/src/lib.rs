@@ -20,6 +20,7 @@ pub mod profiles;
 pub mod providers;
 pub mod search;
 pub mod store;
+pub mod sync;
 pub mod tasks;
 pub mod tuner;
 pub mod worker;

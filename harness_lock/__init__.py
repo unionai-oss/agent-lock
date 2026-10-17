@@ -21,6 +21,10 @@ from ._harness_lock import (
     resolve,
     runtimes,
     select_harness,
+    sync_dockerfile,
+    sync_plan,
+    sync_run_step,
+    sync_skill,
     upgrade,
 )
 
@@ -42,5 +46,9 @@ __all__ = [
     "resolve",
     "runtimes",
     "select_harness",
+    "sync_dockerfile",
+    "sync_plan",
+    "sync_run_step",
+    "sync_skill",
     "upgrade",
 ]

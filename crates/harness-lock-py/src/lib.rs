@@ -661,6 +661,55 @@ fn check_pin(path: String) -> PyResult<String> {
     Ok(json_str(serde_json::json!(drift)))
 }
 
+fn sync_options(prefix: Option<String>, docker: Option<String>, install: bool, pull: bool, all_models: bool, exact: bool) -> core::sync::SyncOptions {
+    core::sync::SyncOptions {
+        prefix: prefix.map(PathBuf::from),
+        docker: docker.map(PathBuf::from),
+        install,
+        pull,
+        all_models,
+        exact,
+    }
+}
+
+/// Build the `hlock sync` plan for a lock as JSON. Nothing is changed.
+#[pyfunction]
+#[pyo3(signature = (path="harness.lock".to_string(), prefix=None, docker=None, install=false, pull=false, all_models=false, exact=false))]
+fn sync_plan(path: String, prefix: Option<String>, docker: Option<String>, install: bool, pull: bool, all_models: bool, exact: bool) -> PyResult<String> {
+    let (reg, ctx) = registry()?;
+    let lock = core::Lockfile::load(Path::new(&path)).map_err(py_err)?;
+    let opts = sync_options(prefix, docker, install, pull, all_models, exact);
+    let plan = core::sync::plan(&lock, Path::new(&path), &reg, &ctx, &opts).map_err(py_err)?;
+    Ok(json_str(serde_json::json!(plan)))
+}
+
+/// Perform one `auto` step from a plan (its JSON); returns a message.
+#[pyfunction]
+fn sync_run_step(step: &str) -> PyResult<String> {
+    let step: core::sync::Step = serde_json::from_str(step).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    core::sync::run_step(&step, &core::profiles::Ctx::from_process()).map_err(py_err)
+}
+
+/// The rehydrate Agent Skill (SKILL.md text) for a plan.
+#[pyfunction]
+#[pyo3(signature = (plan, lock_name="harness.lock".to_string()))]
+fn sync_skill(plan: &str, lock_name: String) -> PyResult<String> {
+    let plan: core::sync::Plan = serde_json::from_str(plan).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    Ok(core::sync::rehydrate_skill(&plan, &lock_name))
+}
+
+/// The Dockerfile and entrypoint for a docker-mode plan, as JSON.
+#[pyfunction]
+#[pyo3(signature = (plan, path="harness.lock".to_string()))]
+fn sync_dockerfile(plan: &str, path: String) -> PyResult<String> {
+    let plan: core::sync::Plan = serde_json::from_str(plan).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let (reg, _) = registry()?;
+    let lock = core::Lockfile::load(Path::new(&path)).map_err(py_err)?;
+    let profile = reg.require_harness(&plan.harness).map_err(py_err)?;
+    let (dockerfile, entrypoint) = core::sync::dockerfile(&plan, &lock, profile);
+    Ok(json_str(serde_json::json!({"dockerfile": dockerfile, "entrypoint": entrypoint})))
+}
+
 #[pymodule]
 fn _harness_lock(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyManifest>()?;
@@ -679,6 +728,10 @@ fn _harness_lock(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(select_harness, m)?)?;
     m.add_function(wrap_pyfunction!(pin, m)?)?;
     m.add_function(wrap_pyfunction!(check_pin, m)?)?;
+    m.add_function(wrap_pyfunction!(sync_plan, m)?)?;
+    m.add_function(wrap_pyfunction!(sync_run_step, m)?)?;
+    m.add_function(wrap_pyfunction!(sync_skill, m)?)?;
+    m.add_function(wrap_pyfunction!(sync_dockerfile, m)?)?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add("LOCK_VERSION", core::LOCK_VERSION)?;
     Ok(())

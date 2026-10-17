@@ -32,6 +32,10 @@ from harness_lock import (
     harnesses,
     load,
     runtimes,
+    sync_dockerfile,
+    sync_plan,
+    sync_run_step,
+    sync_skill,
 )
 from harness_lock import check_pin as _check_pin
 from harness_lock import optimize as al_optimize
@@ -68,6 +72,7 @@ click.rich_click.MAX_WIDTH = 100
 click.rich_click.COMMAND_GROUPS = {
     "hlock": [
         {"name": "Lock", "commands": ["init", "resolve", "pin", "check"]},
+        {"name": "Rehydrate", "commands": ["sync"]},
         {"name": "Harness", "commands": ["harness", "runtime"]},
         {"name": "Inspect", "commands": ["show", "tree", "backend"]},
         {"name": "Run & evolve", "commands": ["run", "upgrade", "optimize"]},
@@ -350,6 +355,193 @@ def pin(harness: str | None, out: str, no_vendor: bool, force: bool, as_json: bo
         else:
             console.print("[muted]no changes since the last pin[/]")
     _next("hlock check", "hlock sync")
+
+
+_STATUS = {"satisfied": "[ok]✓[/]", "auto": "[brand]●[/]", "manual": "[warn]○[/]"}
+MANUAL_EXIT = 3
+
+
+def _plan_table(plan: dict, verbose: bool = False) -> Table:
+    t = Table(box=None, show_header=False, pad_edge=False)
+    t.add_column(no_wrap=True)
+    t.add_column(style="key", no_wrap=True)
+    t.add_column(overflow="fold")
+    by_kind: dict[tuple[str, str], list[dict]] = {}
+    for st in plan["steps"]:
+        if st.get("optional") and st["status"] != "satisfied" and not verbose:
+            continue
+        by_kind.setdefault((st["kind"], st["status"]), []).append(st)
+    order = {"satisfied": 0, "auto": 1, "manual": 2}
+    for (kind, status), steps in sorted(by_kind.items(), key=lambda kv: order[kv[0][1]]):
+        if len(steps) > 6 and not verbose:
+            verb = {"satisfied": "match the lock", "auto": "to restore", "manual": "need you"}[status]
+            t.add_row(_STATUS[status], kind, f"{len(steps)} {kind}s {verb}")
+            continue
+        for st in steps:
+            detail = st["title"]
+            if st["status"] != "satisfied" and st.get("reason"):
+                detail += f"  [muted]{st['reason']}[/]"
+            t.add_row(_STATUS[st["status"]], kind, detail)
+    return t
+
+
+def _rel(path: str) -> str:
+    """A path relative to the working directory when it's inside it."""
+    try:
+        return str(Path(path).resolve().relative_to(Path.cwd().resolve()))
+    except ValueError:
+        return path
+
+
+def _manual_steps(plan: dict) -> list[dict]:
+    return [st for st in plan["steps"] if st["status"] == "manual" and not st.get("optional")]
+
+
+@main.command()
+@click.argument("lock", default=LOCK, required=False)
+@click.option("--plan", "plan_only", is_flag=True, help="Print the plan and change nothing.")
+@click.option("--json", "as_json", is_flag=True, help="Print the plan as JSON and change nothing.")
+@click.option("-y", "--yes", is_flag=True, help="Don't ask before running automatic steps.")
+@click.option("--install", is_flag=True, help="Let hlock run package managers (npm, brew, uv, install scripts).")
+@click.option("--pull", is_flag=True, help="Let hlock download model weights through installed runtimes.")
+@click.option("--all-models", is_flag=True, help="Include models a provider lists but no locked role uses.")
+@click.option("--prefix", default=None, help="Materialize into an isolated config root under DIR, not your real one.")
+@click.option("--docker", "docker", is_flag=True, help="Write a Docker build context and Dockerfile to .hlock/docker/<harness>.")
+@click.option("--build", is_flag=True, help="With --docker: also run docker build.")
+@click.option("--skill", "skill", is_flag=True, help="Write an Agent Skill that guides an agent through the remaining steps.")
+@click.option("--skill-dir", default=".agents/skills/hlock-rehydrate", show_default=True, help="Where --skill writes SKILL.md.")
+@click.option("--exact", is_flag=True, help="Also remove skills that aren't in the lock (moved aside, not deleted).")
+@click.option("-v", "--verbose", is_flag=True, help="List every step, including optional ones.")
+def sync(lock: str, plan_only: bool, as_json: bool, yes: bool, install: bool, pull: bool, all_models: bool,
+         prefix: str | None, docker: bool, build: bool, skill: bool, skill_dir: str, exact: bool, verbose: bool) -> None:
+    """Rehydrate the setup in [path]harness.lock[/] on this machine.
+
+    Builds a plan in which each step is [ok]✓ satisfied[/], [brand]● automatic[/] (hlock does it), or
+    [warn]○ manual[/] (hlock prints what to run and why). Automatic steps restore config, skills
+    and instruction files and install plugins through the harness's own CLI. Package
+    installs need [cmd]--install[/] and model downloads need [cmd]--pull[/]. Exits 3 while manual
+    steps remain, so it's safe to re-run until it's clean.
+    """
+    docker_dir = None
+    if docker:
+        with _friendly_errors():
+            harness_id = Lockfile.load(lock).harness
+        docker_dir = str(Path(".hlock/docker") / harness_id)
+    with _working("Planning…"):
+        plan = json.loads(sync_plan(lock, prefix=prefix, docker=docker_dir, install=install, pull=pull,
+                                    all_models=all_models, exact=exact))
+    if as_json:
+        console.print_json(data=plan)
+        return
+    where = {"home": "your config", "prefix": f"[path]{_rel(plan['root'])}[/]",
+             "docker": f"[path]{docker_dir}[/]"}[plan["mode"]]
+    console.print(f"[bold]Sync plan[/] for {plan['harness_name']} {plan.get('version') or ''} → {where}")
+    console.print(_plan_table(plan, verbose))
+
+    if skill:
+        path = Path(skill_dir) / "SKILL.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(sync_skill(json.dumps(plan), lock))
+        _ok(f"wrote [path]{path}[/]")
+        console.print("[muted]open your agent here and ask it to rehydrate the harness with the hlock-rehydrate skill[/]")
+        return
+    if plan_only:
+        return
+
+    auto = [st for st in plan["steps"] if st["status"] == "auto"]
+    if docker:
+        auto = [st for st in auto if st["kind"] in ("config", "skill", "instructions")]
+    if auto and not yes and not docker:
+        if not sys.stdin.isatty():
+            _fail(f"{len(auto)} automatic steps to run", "pass [cmd]--yes[/] to run them, or [cmd]--plan[/] to just look")
+        if not click.confirm(f"Run {len(auto)} automatic step{'s' if len(auto) != 1 else ''}?", default=True):
+            sys.exit(1)
+    failed = 0
+    groups: dict[str, list[dict]] = {}
+    for st in auto:
+        groups.setdefault(st["kind"], []).append(st)
+    for kind, steps in groups.items():
+        quiet = len(steps) > 6
+        done = 0
+        for st in steps:
+            with console.status(f"[brand]{st['title']}…[/]", spinner="dots"):
+                try:
+                    msg = sync_run_step(json.dumps(st))
+                except ValueError as e:
+                    failed += 1
+                    err_console.print(f"[fail]✗[/] {st['title']}\n  [muted]{e}[/]")
+                    continue
+            done += 1
+            if not quiet:
+                notes = []
+                if "previous:" in msg:
+                    notes.append("kept the old file as .hlock-bak")
+                if "placeholders left" in msg:
+                    notes.append("placeholders for missing secrets")
+                if st["kind"] in ("plugin", "harness", "runtime", "model", "package"):
+                    notes.append(msg)
+                console.print(f"[ok]✓[/] {st['title']}" + (f"  [muted]{'; '.join(notes)}[/]" if notes else ""))
+        if quiet and done:
+            console.print(f"[ok]✓[/] restored {done} {kind}s")
+
+    if docker:
+        files = json.loads(sync_dockerfile(json.dumps(plan), lock))
+        ctx = Path(docker_dir)
+        (ctx / "home").mkdir(parents=True, exist_ok=True)
+        (ctx / "Dockerfile").write_text(files["dockerfile"])
+        entry = ctx / "hlock-entrypoint"
+        entry.write_text(files["entrypoint"])
+        entry.chmod(0o755)
+        _ok(f"wrote [path]{ctx / 'Dockerfile'}[/]")
+        tag = f"hlock-{plan['harness']}"
+        secrets = " ".join(f"-e {st['id'].split(':', 1)[1]}" for st in plan["steps"] if st["kind"] == "secret")
+        if build:
+            import subprocess
+
+            console.print(f"[brand]docker build -t {tag} {ctx}[/]")
+            if subprocess.run(["docker", "build", "-t", tag, str(ctx)], check=False).returncode != 0:
+                _fail("docker build failed")
+            _ok(f"built [bold]{tag}[/]")
+        console.print("[muted]next →[/]")
+        if not build:
+            console.print(f"  [cmd]docker build -t {tag} {ctx}[/]", soft_wrap=True)
+        run_cmd = f"docker run -it --rm {secrets + ' ' if secrets else ''}-v \"$PWD:/workspace\" {tag}"
+        console.print(f"  [cmd]{run_cmd}[/]", soft_wrap=True)
+        sys.exit(1 if failed else 0)
+
+    remaining = _manual_steps(plan)
+    if remaining:
+        secrets = [st for st in remaining if st["kind"] == "secret"]
+        others = [st for st in remaining if st["kind"] != "secret"]
+        console.print(f"\n[warn]{len(remaining)} step{'s need' if len(remaining) != 1 else ' needs'} you:[/]")
+        for i, st in enumerate(others, 1):
+            console.print(f"  {i}. {st['title']}" + (f"  [muted]{st['reason']}[/]" if st.get("reason") else ""))
+            if st.get("command"):
+                console.print(f"     [cmd]{st['command']}[/]")
+        if secrets:
+            n = len(others) + 1
+            console.print(f"  {n}. Set {len(secrets)} secret{'s' if len(secrets) != 1 else ''}, then re-run "
+                          "[cmd]hlock sync[/] [muted](values stay out of the lock)[/]")
+            for st in secrets:
+                name, _, used = st["title"].partition(" (")
+                console.print(f"     [cmd]export {name}=…[/]  [muted]# {used.rstrip(')')}[/]")
+        hints = []
+        if any("--install" in (st.get("reason") or "") for st in remaining):
+            hints.append("hlock sync --install")
+        if any("--pull" in (st.get("reason") or "") for st in remaining):
+            hints.append("hlock sync --pull")
+        hints.append("hlock sync --skill [muted](let your agent do it)[/]")
+        _next(*hints)
+    if failed:
+        sys.exit(1)
+    if remaining:
+        sys.exit(MANUAL_EXIT)
+    if plan["mode"] == "prefix":
+        env = " ".join(f"{k}={_rel(v)}" for k, v in plan["isolation"].items())
+        _ok(f"in sync at [path]{_rel(plan['root'])}[/]")
+        console.print(f"[muted]use it:[/] [cmd]{env} {plan.get('binary') or plan['harness']}[/]", soft_wrap=True)
+    else:
+        _ok(f"in sync with [path]{lock}[/]")
 
 
 @main.command()

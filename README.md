@@ -81,10 +81,12 @@ servers, skills, plugins, and config, with secrets replaced by placeholders.
 hlock harness list      # the harnesses on this machine, and the one you're running inside
 hlock pin               # lock your current setup into harness.lock
 hlock check             # fail if your setup drifted from the pin
+hlock sync              # on another machine: rehydrate it (also --prefix DIR, --docker)
 ```
 
 See [Harnesses](https://unionai-oss.github.io/hlock/guides/harnesses/) and
-[Pinning your setup](https://unionai-oss.github.io/hlock/guides/pin/).
+[Pinning your setup](https://unionai-oss.github.io/hlock/guides/pin/), and
+[Rehydrating with sync](https://unionai-oss.github.io/hlock/guides/sync/).
 
 <details>
 <summary><b>Python API</b></summary>

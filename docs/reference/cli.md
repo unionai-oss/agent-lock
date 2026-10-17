@@ -17,6 +17,7 @@ Failures print a one-line error with a hint and exit `1`.
 | [`resolve`](#resolve) | Tune the search space and write `harness.lock` |
 | [`pin`](#pin) | Pin your current harness setup into `harness.lock` |
 | [`check`](#check) | Fail if `harness.toml` has drifted from `harness.lock`, or a pinned setup changed |
+| [`sync`](#sync) | Rehydrate the setup in a lock on this machine, in a prefix, or in a Docker image |
 | [`show`](#show) | Show the locked stack and its evidence |
 | [`tree`](#tree) | Print the locked component graph |
 | [`harness list`](#harness-list) | List known harnesses and what's installed |
@@ -93,6 +94,35 @@ harness isn't installed).
 ```bash
 hlock check
 ```
+
+## `sync`
+
+Build a plan to reproduce a lock's setup, run its automatic steps, and list what needs you.
+See [Rehydrating with sync](../guides/sync.md).
+
+```bash
+hlock sync [LOCK] [OPTIONS]
+```
+
+| Option | Description |
+|---|---|
+| `LOCK` | Lock to sync (default `harness.lock`) |
+| `--plan` | Print the plan and change nothing |
+| `--json` | Print the plan as JSON and change nothing |
+| `-y`, `--yes` | Don't ask before running automatic steps (required when stdin isn't a terminal) |
+| `--install` | Let hlock run package managers and install scripts |
+| `--pull` | Let hlock download model weights through installed runtimes |
+| `--all-models` | Include models no locked role uses |
+| `--prefix DIR` | Materialize into an isolated config root under `DIR` |
+| `--docker` | Write a Docker build context to `.hlock/docker/<harness>/` |
+| `--build` | With `--docker`, also run `docker build` |
+| `--skill` | Write an Agent Skill that guides an agent through the remaining steps |
+| `--skill-dir DIR` | Where `--skill` writes `SKILL.md` (default `.agents/skills/hlock-rehydrate`) |
+| `--exact` | Also move aside skills that aren't in the lock |
+| `-v`, `--verbose` | List every step, including optional ones |
+
+Exits `0` when everything matches, `3` while manual steps remain, and `1` if an automatic
+step fails.
 
 ## `show`
 
@@ -217,5 +247,6 @@ hlock optimize [--depth LEVEL] [--data SOURCE] [OPTIONS]
 | Code | Meaning |
 |---|---|
 | `0` | Success |
-| `1` | Failure: drift (`check`), a failed task (`run`), a missing or invalid file, or a tuning error |
+| `1` | Failure: drift (`check`), a failed task (`run`), a failed sync step, a missing or invalid file, or a tuning error |
 | `2` | Invalid command-line usage |
+| `3` | `sync` finished its automatic steps, but manual steps remain |

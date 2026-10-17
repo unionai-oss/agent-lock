@@ -7,9 +7,9 @@ new harness, or fixing a path for an existing one, means editing a file.
 !!! note "What reads which fields"
 
     Profiles drive detection, versions and install sources, `hlock harness show`, targeting,
-    and [`hlock pin`](pin.md), which reads `model`, `providers`, `mcp`, `skills`, `bundles`,
-    `instructions` and `files`. The `launch` and `run` fields are for the upcoming
-    `hlock sync` and `hlock launch` (design:
+    [`hlock pin`](pin.md) (`model`, `providers`, `mcp`, `skills`, `bundles`, `instructions`,
+    `files`), and [`hlock sync`](sync.md) (`install`, `files`, `skills.write`,
+    `config-root`). The `launch` and `run` fields are for the upcoming `hlock launch` (design:
     [SPEC §7.8](https://github.com/unionai-oss/hlock/blob/main/SPEC.md)).
 
 ## Where profiles come from
