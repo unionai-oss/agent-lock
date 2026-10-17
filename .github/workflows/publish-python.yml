@@ -13,12 +13,15 @@ name: publish-python
 # and stop before publishing. Set `dry_run: false` to publish from a manual run.
 #
 # One-time setup (see RELEASING.md):
-#   - a GitHub environment named `pypi`
-#   - one PyPI trusted publisher per package name (`harness-lock`, then `hlock`), added
-#     while logged in as the unionai-oss PyPI account (as *pending* publishers before
-#     the first release, since the projects don't exist yet): owner `unionai-oss`,
-#     repository `harness-lock`, workflow `publish-python.yml`, environment `pypi`.
-# No API token is stored anywhere; the `pypi` job's `id-token: write` authenticates.
+#   - two GitHub environments: `pypi` (publishes harness-lock) and `pypi-hlock`
+#     (publishes hlock)
+#   - one PyPI trusted publisher per package name, added while logged in as the
+#     unionai-oss PyPI account (as *pending* publishers before the first release, since
+#     the projects don't exist yet): owner `unionai-oss`, repository `harness-lock`,
+#     workflow `publish-python.yml`, and environment `pypi` for `harness-lock`,
+#     `pypi-hlock` for `hlock`. Distinct environments keep the two publisher
+#     configurations distinct, which PyPI requires of pending publishers.
+# No API token is stored anywhere; each publish job's `id-token: write` authenticates.
 
 on:
   push:
@@ -196,7 +199,7 @@ jobs:
     name: Publish hlock to PyPI
     needs: [pypi]
     runs-on: ubuntu-latest
-    environment: pypi
+    environment: pypi-hlock
     permissions:
       id-token: write # PyPI trusted publishing — no API token needed
     steps:

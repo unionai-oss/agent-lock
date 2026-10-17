@@ -39,23 +39,26 @@ Needed once per repository, not once per release.
 - [ ] Make sure Actions runs for this repo (org Settings → Actions: enabled, allowed
       actions include `PyO3/maturin-action`, `pypa/gh-action-pypi-publish`,
       `dtolnay/rust-toolchain`, `Swatinem/rust-cache`).
-- [ ] Create an environment named `pypi` (Settings → Environments). Add required
-      reviewers if you want a human gate before each publish.
+- [ ] Create two environments (Settings → Environments): `pypi`, which publishes
+      `harness-lock`, and `pypi-hlock`, which publishes `hlock`. Give them the same
+      deployment tag rules and required reviewers, if you want a human gate before each
+      publish.
 - [ ] Create an environment named `crates-io` and add the `CARGO_REGISTRY_TOKEN`
       secret to it (below).
 
 **PyPI**: log in at <https://pypi.org/manage/account/publishing/> **as the
 unionai-oss PyPI account** (whoever registers the publisher becomes the project owner)
 and add two **pending publishers**, one per package name (the projects don't exist until
-the first upload). They're identical except for the project name:
+the first upload). They differ in project name and environment; PyPI won't register two
+pending publishers with identical owner/repository/workflow/environment:
 
-| Field | Value |
-|---|---|
-| PyPI project name | `harness-lock`, then `hlock` |
-| Owner | `unionai-oss` |
-| Repository name | `harness-lock` |
-| Workflow name | `publish-python.yml` |
-| Environment name | `pypi` |
+| Field | `harness-lock` | `hlock` |
+|---|---|---|
+| PyPI project name | `harness-lock` | `hlock` |
+| Owner | `unionai-oss` | `unionai-oss` |
+| Repository name | `harness-lock` | `harness-lock` |
+| Workflow name | `publish-python.yml` | `publish-python.yml` |
+| Environment name | `pypi` | `pypi-hlock` |
 
 No API token is stored anywhere. The publish jobs' `id-token: write` permission is
 what authenticates.
@@ -92,7 +95,7 @@ what authenticates.
        git tag v0.2.0 && git push origin v0.2.0
        ```
        Both publish workflows refuse to run if the tag doesn't match the version.
-4. [ ] Approve the `pypi` / `crates-io` environment deployments if reviewers are required.
+4. [ ] Approve the `pypi` / `pypi-hlock` / `crates-io` environment deployments if reviewers are required.
 5. [ ] Check the results:
        - <https://pypi.org/project/harness-lock/> lists the version with 5 wheels + sdist
        - <https://pypi.org/project/hlock/> lists the same version (1 wheel + sdist)
