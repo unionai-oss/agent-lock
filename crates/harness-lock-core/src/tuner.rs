@@ -241,6 +241,7 @@ impl Tuner {
                     resolved_from: Some(spec.clone()),
                     params: BTreeMap::new(),
                     fingerprint: Some(format!("sha256:{}", crate::hash::sha256_hex(spec.as_bytes()))),
+                    ..Default::default()
                 }
             })
             .collect();

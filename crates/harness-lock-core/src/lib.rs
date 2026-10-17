@@ -10,6 +10,7 @@
 //! model so the user surface stays stable across the language boundary.
 
 pub mod adapters;
+pub mod capture;
 pub mod error;
 pub mod hash;
 pub mod lockfile;

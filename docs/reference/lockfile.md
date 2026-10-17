@@ -84,6 +84,20 @@ the complete file.
 | `[verify]` | Runtime verification thresholds: `canary-tasks`, `min-success-rate`, `fingerprint-tolerance` |
 | `[provenance]` | The backend that produced the lock, and the search settings |
 
+## Pinned locks
+
+[`hlock pin`](../guides/pin.md) writes a lock with `kind = "pin"`, no `manifest-hash`, and
+no evidence. Its `[[llm]]` entries may carry `endpoint` and `runtime`; `[[tool]]` entries for
+MCP servers carry `transport`, `command`, `args`, `url`, `env`, `headers`, `scope` and
+`enabled`; `[[skill]]` entries carry `scope`, `path` and `vendored`. It adds:
+
+| Section | Contents |
+|---|---|
+| `[[native]]` | Plugins, packages, extensions and marketplaces: `kind` (e.g. `claude-code.plugin`, `pi.package`), `name`, `version`, `source`, `revision`, `integrity`, `enabled`, `config` |
+| `[[runtime]]` | Inference runtimes: `name`, `location` (`local` or `network`), `version`, `source`, `endpoint`, and `[[runtime.model]]` entries with `id`, `source`, `revision`, `digest`, `size-bytes`, `present` |
+| `[[config]]` | Harness config files: `id`, `path`, `format`, `restore` (`whole`, `pointers`, `record`), `pointers`, `digest`, `vendored` |
+| `[[secret]]` | Placeholders that replaced secrets: `name` (the environment variable that supplies it) and `used-by` |
+
 ## `harness.opt.lock`
 
 [`hlock optimize`](../guides/optimize.md) writes a separate opt-lock with the same shape,

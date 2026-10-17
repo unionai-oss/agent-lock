@@ -308,6 +308,12 @@ impl PyLockfile {
         self.inner.harness.name.clone()
     }
 
+    /// `"pin"` for locks written by `hlock pin`, `"optimize"` for opt-locks, else `None`.
+    #[getter]
+    fn kind(&self) -> Option<String> {
+        self.inner.kind.clone()
+    }
+
     #[getter]
     fn harness_version(&self) -> Option<String> {
         self.inner.harness.version.clone()
@@ -621,6 +627,40 @@ fn select_harness(explicit: Option<String>, manifest_target: Option<String>) -> 
     Ok(json_str(serde_json::json!(sel)))
 }
 
+/// Capture the target harness's live setup into a pinned lock at `out`.
+/// Returns JSON with the lock, the chosen harness, the diff from a previous pin,
+/// vendored files, and warnings.
+#[pyfunction]
+#[pyo3(signature = (harness=None, out="harness.lock".to_string(), vendor=true, force=false))]
+fn pin(harness: Option<String>, out: String, vendor: bool, force: bool) -> PyResult<String> {
+    let (reg, ctx) = registry()?;
+    let path = ctx.cwd.join(core::MANIFEST_PATH);
+    let manifest = if path.is_file() { core::Manifest::load(&path).ok() } else { None };
+    let target = manifest.as_ref().and_then(|m| m.target_harness());
+    let project = manifest.as_ref().and_then(|m| m.project.get("name").and_then(|v| v.as_str()).map(str::to_string));
+    let o = core::capture::pin(&reg, &ctx, harness.as_deref(), target.as_deref(), project.as_deref(), Path::new(&out), vendor, force)
+        .map_err(py_err)?;
+    Ok(json_str(serde_json::json!({
+        "lock": o.lock,
+        "path": o.path,
+        "selection": o.selection,
+        "diff": o.diff,
+        "previous": o.previous,
+        "vendored": o.vendored,
+        "warnings": o.warnings,
+    })))
+}
+
+/// Re-capture the harness a pinned lock is for; returns a JSON list of drift lines.
+#[pyfunction]
+#[pyo3(signature = (path="harness.lock".to_string()))]
+fn check_pin(path: String) -> PyResult<String> {
+    let (reg, ctx) = registry()?;
+    let lock = core::Lockfile::load(Path::new(&path)).map_err(py_err)?;
+    let drift = core::capture::check_pin(&lock, &reg, &ctx).map_err(py_err)?;
+    Ok(json_str(serde_json::json!(drift)))
+}
+
 #[pymodule]
 fn _harness_lock(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyManifest>()?;
@@ -637,6 +677,8 @@ fn _harness_lock(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(runtimes, m)?)?;
     m.add_function(wrap_pyfunction!(harness_profile, m)?)?;
     m.add_function(wrap_pyfunction!(select_harness, m)?)?;
+    m.add_function(wrap_pyfunction!(pin, m)?)?;
+    m.add_function(wrap_pyfunction!(check_pin, m)?)?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add("LOCK_VERSION", core::LOCK_VERSION)?;
     Ok(())

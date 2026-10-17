@@ -15,7 +15,8 @@ Failures print a one-line error with a hint and exit `1`.
 |---|---|
 | [`init`](#init) | Write a starter `harness.toml` |
 | [`resolve`](#resolve) | Tune the search space and write `harness.lock` |
-| [`check`](#check) | Fail if `harness.toml` has drifted from `harness.lock` |
+| [`pin`](#pin) | Pin your current harness setup into `harness.lock` |
+| [`check`](#check) | Fail if `harness.toml` has drifted from `harness.lock`, or a pinned setup changed |
 | [`show`](#show) | Show the locked stack and its evidence |
 | [`tree`](#tree) | Print the locked component graph |
 | [`harness list`](#harness-list) | List known harnesses and what's installed |
@@ -58,13 +59,34 @@ hlock resolve [--backend local|devbox|cluster] [--harness NAME] [--workdir DIR]
 | `--harness` | manifest `[target] harness` | Target harness for this run. See [Harnesses](../guides/harnesses.md#resolve-for-a-target). |
 | `--workdir` | `.harnesslock` | Where trial artifacts go |
 
+## `pin`
+
+Capture the live setup of one harness (version, models, local runtimes, MCP servers, skills,
+plugins, instruction files, config) into a pinned lock. Secrets become
+`${HLOCK_SECRET_…}` placeholders. See [Pinning your setup](../guides/pin.md).
+
+```bash
+hlock pin [--harness NAME] [-o FILE] [--no-vendor] [--force] [--json]
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--harness` | `[target]`, else the harness you're running inside | Harness to pin |
+| `-o`, `--out` | `harness.lock` | Where to write the lock |
+| `--no-vendor` | | Record digests only; don't copy files into `.hlock/vendor/` |
+| `--force` | | Replace a resolved lock (one with evidence) |
+| `--json` | | Print the lock, the diff from the previous pin, vendored files, and warnings as JSON |
+
 ## `check`
 
 Compare the manifest hash recorded in `harness.lock` with the hash of the current
 `harness.toml`. Exits `0` when they match and `1` on drift, or when either file is
 missing. See [Using hlock in CI](../guides/ci.md).
 
-`check` also fails when the lock is for a different harness than `[target] harness`, or
+For a pinned lock (`kind = "pin"`), `check` needs no `harness.toml`: it re-captures the
+harness and fails with a list of what changed.
+
+For a resolved lock, `check` also fails when the lock is for a different harness than `[target] harness`, or
 when the installed harness's version differs from the one the lock pins (skipped when the
 harness isn't installed).
 

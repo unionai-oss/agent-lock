@@ -6,10 +6,11 @@ new harness, or fixing a path for an existing one, means editing a file.
 
 !!! note "What reads which fields"
 
-    Today profiles drive detection, versions and install sources, `hlock harness show`, and
-    targeting. The `model`, `providers`, `mcp`, `skills`, `bundles`, `files` and `launch`
-    fields are read by the upcoming `hlock pin`, `hlock sync` and `hlock launch` commands
-    (design: [SPEC §7.8](https://github.com/unionai-oss/hlock/blob/main/SPEC.md)).
+    Profiles drive detection, versions and install sources, `hlock harness show`, targeting,
+    and [`hlock pin`](pin.md), which reads `model`, `providers`, `mcp`, `skills`, `bundles`,
+    `instructions` and `files`. The `launch` and `run` fields are for the upcoming
+    `hlock sync` and `hlock launch` (design:
+    [SPEC §7.8](https://github.com/unionai-oss/hlock/blob/main/SPEC.md)).
 
 ## Where profiles come from
 
@@ -83,7 +84,8 @@ value wins:
 - `env:VAR` reads an environment variable.
 - `<file>#<pointer>` reads a value from a named file in `[files]`, where `<pointer>` is a
   [JSON pointer](https://datatracker.ietf.org/doc/html/rfc6901), applied to TOML and YAML
-  files as if they were JSON.
+  files as if they were JSON. `{cwd}` inside a pointer is replaced with the escaped project
+  path (Claude Code keeps per-project MCP servers under `/projects/{cwd}/mcpServers`).
 
 Set `model.format = "provider/model"` when the model value carries its provider (OpenCode's
 `anthropic/claude-sonnet-4-5`), or `model.default-provider` when the harness only talks to one.

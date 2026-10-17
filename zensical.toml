@@ -26,6 +26,7 @@ nav = [
   ] },
   { "Guides" = [
     "guides/harnesses.md",
+    "guides/pin.md",
     "guides/harness-profiles.md",
     "guides/task-packs.md",
     "guides/backends.md",

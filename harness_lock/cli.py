@@ -33,7 +33,9 @@ from harness_lock import (
     load,
     runtimes,
 )
+from harness_lock import check_pin as _check_pin
 from harness_lock import optimize as al_optimize
+from harness_lock import pin as _pin
 from harness_lock import resolve as _resolve
 from harness_lock import select_harness as _select_harness
 from harness_lock import upgrade as al_upgrade
@@ -65,7 +67,7 @@ click.rich_click.STYLE_USAGE = "bold magenta"
 click.rich_click.MAX_WIDTH = 100
 click.rich_click.COMMAND_GROUPS = {
     "hlock": [
-        {"name": "Lock", "commands": ["init", "resolve", "check"]},
+        {"name": "Lock", "commands": ["init", "resolve", "pin", "check"]},
         {"name": "Harness", "commands": ["harness", "runtime"]},
         {"name": "Inspect", "commands": ["show", "tree", "backend"]},
         {"name": "Run & evolve", "commands": ["run", "upgrade", "optimize"]},
@@ -94,6 +96,8 @@ def _hint_for(message: str) -> str | None:
         return "list the known harnesses with [cmd]hlock harness list[/]"
     if "several harnesses are installed" in message or "no supported harness" in message:
         return f"pass [cmd]--harness <name>[/] or set [key]\\[target] harness[/] in [path]{MANIFEST}[/]"
+    if "resolved lock with evidence" in message:
+        return "use [cmd]hlock pin -o pinned.lock[/] to keep both"
     if "python worker" in message:
         return "set [key]HL_PYTHON[/] to an interpreter that has hlock installed"
     return None
@@ -181,6 +185,59 @@ def _lock_panel(lf, title: str = LOCK) -> Panel:
     )
 
 
+def _count_by(items, key) -> str:
+    counts: dict[str, int] = {}
+    for it in items:
+        counts[it.get(key) or "?"] = counts.get(it.get(key) or "?", 0) + 1
+    return ", ".join(f"{n} {k}" for k, n in sorted(counts.items(), key=lambda kv: -kv[1]))
+
+
+def _pin_panel(lock: dict, title: str = LOCK) -> Panel:
+    """The summary panel for a pinned lock (no evidence; components instead)."""
+    h = lock.get("harness") or {}
+    t = _kv_table()
+    t.add_row("harness", f"[bold]{h.get('name')}[/] {h.get('version') or ''}  [muted]{h.get('source') or ''}[/]")
+    for llm in lock.get("llm") or []:
+        where = f"  [muted]via {llm['runtime']}[/]" if llm.get("runtime") else (
+            f"  [muted]{llm['endpoint']}[/]" if llm.get("endpoint") else "")
+        t.add_row(f"llm · {llm['role']}", f"[bold]{llm['provider']}:{llm['model']}[/]{where}")
+    for rt in lock.get("runtime") or []:
+        models = rt.get("model") or []
+        present = sum(1 for m in models if m.get("present"))
+        loc = "local" if rt.get("location") == "local" else "network"
+        detail = f"{len(models)} model{'s' if len(models) != 1 else ''}" + (f", {present} on disk" if loc == "local" else "")
+        t.add_row("runtime", f"[bold]{rt['name']}[/] {rt.get('version') or ''}  [muted]({loc}, {detail})[/]")
+    tools = lock.get("tool") or []
+    if tools:
+        t.add_row("mcp", ", ".join(f"{x['name']} [muted]({x.get('transport', '?')})[/]" for x in tools))
+    skills = lock.get("skill") or []
+    if skills:
+        t.add_row("skills", f"{len(skills)}  [muted]({_count_by(skills, 'origin')})[/]")
+    natives = lock.get("native") or []
+    if natives:
+        kinds = _count_by([{"k": n["kind"].split(".")[-1]} for n in natives], "k")
+        t.add_row("plugins", f"{len(natives)}  [muted]({kinds})[/]")
+    ins = lock.get("instructions") or []
+    if ins:
+        t.add_row("instructions", ", ".join(i["name"] for i in ins))
+    cfg = lock.get("config") or []
+    if cfg:
+        t.add_row("config", ", ".join(c["path"] + (f" [muted]{','.join(c['pointers'])}[/]" if c.get("pointers") else "")
+                                      for c in cfg))
+    secrets = lock.get("secret") or []
+    if secrets:
+        t.add_row("secrets", f"{len(secrets)} redacted  [muted](supplied as HLOCK_SECRET_* when syncing)[/]")
+    return Panel(t, title=f"[brand]📌 {title} · pinned[/]", title_align="left", border_style="magenta",
+                 expand=False, padding=(1, 2))
+
+
+def _print_lock(lf, title: str = LOCK) -> None:
+    if lf.kind == "pin":
+        console.print(_pin_panel(json.loads(lf.to_json()), title))
+    else:
+        console.print(_lock_panel(lf, title))
+
+
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 @click.version_option(__version__, "-V", "--version", prog_name="hlock")
 def main() -> None:
@@ -255,6 +312,47 @@ def resolve(backend: str | None, harness: str | None, workdir: str | None) -> No
 
 
 @main.command()
+@click.option("--harness", "harness", default=None,
+              help="Harness to pin. [dim]\\[default: \\[target], else the one you're running in][/]")
+@click.option("-o", "--out", default=LOCK, show_default=True, help="Where to write the pinned lock.")
+@click.option("--no-vendor", is_flag=True, help="Don't copy unfetchable skills and config into .hlock/vendor.")
+@click.option("--force", is_flag=True, help="Replace a resolved lock (one with evidence).")
+@click.option("--json", "as_json", is_flag=True, help="Print the result as JSON.")
+def pin(harness: str | None, out: str, no_vendor: bool, force: bool, as_json: bool) -> None:
+    """Pin your current harness setup into [path]harness.lock[/].
+
+    Captures the harness version and install source, the default and small models,
+    local inference runtimes and their models, MCP servers, skills, plugins,
+    instruction files, and config. Secrets are replaced with
+    [key]HLOCK_SECRET_*[/] placeholders; content another machine can't fetch is
+    vendored into [path].hlock/vendor/[/]. No [path]harness.toml[/] needed.
+    """
+    with _working("Pinning your harness setup…"):
+        result = json.loads(_pin(harness=harness, out=out, vendor=not no_vendor, force=force))
+    if as_json:
+        console.print_json(data=result)
+        return
+    lock, sel = result["lock"], result["selection"]
+    h = lock["harness"]
+    _ok(f"pinned [bold]{h['name']}[/] {h.get('version') or ''} → [path]{out}[/]  [muted]({sel['reason']})[/]")
+    for w in result["warnings"]:
+        console.print(f"[warn]![/] {w}")
+    console.print(_pin_panel(lock, out))
+    if result["vendored"]:
+        console.print(f"[muted]vendored {len(result['vendored'])} files into[/] [path].hlock/vendor/{h['name']}/[/]  "
+                      "[muted]· review before committing[/]")
+    if result["previous"]:
+        if result["diff"]:
+            console.print("[bold]changes since the last pin[/]")
+            for line in result["diff"]:
+                style = {"+": "ok", "-": "fail", "~": "warn"}.get(line[:1], "muted")
+                console.print(f"  [{style}]{line}[/]")
+        else:
+            console.print("[muted]no changes since the last pin[/]")
+    _next("hlock check", "hlock sync")
+
+
+@main.command()
 @click.option("--json", "as_json", is_flag=True, help="Print the lockfile as JSON.")
 def show(as_json: bool) -> None:
     """Show the locked stack and the evidence behind it."""
@@ -263,15 +361,30 @@ def show(as_json: bool) -> None:
     if as_json:
         console.print_json(lf.to_json())
         return
-    console.print(_lock_panel(lf))
+    _print_lock(lf)
 
 
 @main.command()
 def check() -> None:
-    """Fail if [path]harness.toml[/] has drifted from [path]harness.lock[/] (CI-friendly)."""
+    """Fail if [path]harness.toml[/] has drifted from [path]harness.lock[/] (CI-friendly).
+
+    For a pinned lock, re-capture the harness and fail if the setup changed.
+    """
+    with _friendly_errors():
+        lf = Lockfile.load(LOCK)
+    if lf.kind == "pin":
+        with _working(f"Re-capturing {lf.harness}…"):
+            drift = json.loads(_check_pin(LOCK))
+        if drift:
+            err_console.print(f"[fail]✗ drift:[/] your {lf.harness} setup changed since {LOCK} was pinned")
+            for line in drift:
+                err_console.print(f"  {line}")
+            err_console.print("  [muted]hint:[/] re-pin with [cmd]hlock pin[/], or restore it with [cmd]hlock sync[/]")
+            sys.exit(1)
+        _ok(f"your {lf.harness} setup matches [path]{LOCK}[/]")
+        return
     with _friendly_errors():
         m = Manifest.load(MANIFEST)
-        lf = Lockfile.load(LOCK)
     if lf.manifest_hash is None:
         _fail(f"{LOCK} has no manifest-hash", "re-create it with [cmd]hlock resolve[/]")
     live = m.manifest_hash()
@@ -303,6 +416,9 @@ def tree() -> None:
     """Print the locked component dependency graph."""
     with _friendly_errors():
         lf = Lockfile.load(LOCK)
+    if lf.kind == "pin":
+        console.print(_pin_tree(json.loads(lf.to_json())))
+        return
     root = Tree(f"[brand]🔒 {LOCK}[/]", guide_style="magenta")
     stack = root.add(f"[bold]stack[/] [muted]harness={lf.harness}[/]")
     llms = stack.add("[key]llm[/]")
@@ -312,6 +428,35 @@ def tree() -> None:
     stack.add(f"[key]harness[/]  [bold]{lf.harness}[/]")
     root.add(f"[key]provenance[/]  backend={lf.provenance}")
     console.print(root)
+
+
+def _pin_tree(lock: dict) -> Tree:
+    h = lock.get("harness") or {}
+    root = Tree(f"[brand]📌 {LOCK}[/] [muted]pinned[/]", guide_style="magenta")
+    hn = root.add(f"[bold]{h.get('name')}[/] {h.get('version') or ''}  [muted]{h.get('source') or ''}[/]")
+    if lock.get("llm"):
+        node = hn.add("[key]llm[/]")
+        for llm in lock["llm"]:
+            node.add(f"{llm['role']}  [bold]{llm['provider']}:{llm['model']}[/]")
+    for rt in lock.get("runtime") or []:
+        node = root.add(f"[key]runtime[/] [bold]{rt['name']}[/] {rt.get('version') or ''} [muted]({rt.get('location')})[/]")
+        for m in rt.get("model") or []:
+            mark = "" if rt.get("location") != "local" else ("  [ok]on disk[/]" if m.get("present") else "  [warn]missing[/]")
+            node.add(f"{m['id']}  [muted]{m.get('source') or ''}[/]{mark}")
+    if lock.get("tool"):
+        node = hn.add("[key]mcp[/]")
+        for x in lock["tool"]:
+            node.add(f"{x['name']}  [muted]{x.get('transport', '')} {x.get('source') or x.get('url') or x.get('command') or ''}[/]")
+    if lock.get("skill"):
+        node = hn.add(f"[key]skills[/] [muted]({len(lock['skill'])})[/]")
+        for sk in lock["skill"]:
+            node.add(f"{sk['name']}  [muted]{sk.get('origin')}[/]")
+    if lock.get("native"):
+        node = hn.add("[key]plugins[/]")
+        for n in lock["native"]:
+            off = "" if n.get("enabled", True) else "  [muted](disabled)[/]"
+            node.add(f"{n['name']} {n.get('version') or ''}  [muted]{n['kind']}[/]{off}")
+    return root
 
 
 @main.command()

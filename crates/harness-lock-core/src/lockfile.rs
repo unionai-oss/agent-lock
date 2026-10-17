@@ -21,6 +21,12 @@ pub struct LLM {
     #[serde(default)]
     pub params: BTreeMap<String, serde_json::Value>,
     pub fingerprint: Option<String>,
+    /// Base URL the harness sends this model's requests to (pinned locks).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub endpoint: Option<String>,
+    /// Local inference runtime serving the model, matching a `[[runtime]]` name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime: Option<String>,
 }
 
 impl Default for LLM {
@@ -32,6 +38,8 @@ impl Default for LLM {
             resolved_from: None,
             params: BTreeMap::new(),
             fingerprint: None,
+            endpoint: None,
+            runtime: None,
         }
     }
 }
@@ -71,6 +79,25 @@ pub struct Tool {
     pub tool_schema: Option<String>,
     #[serde(default)]
     pub permissions: Vec<String>,
+    /// MCP servers: `stdio`, `http`, or `sse`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transport: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub args: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    /// Environment for the server; secret values are `${HLOCK_SECRET_…}` placeholders.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub env: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub headers: BTreeMap<String, String>,
+    /// `user` or `project`: the config scope the server came from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -91,6 +118,15 @@ pub struct Skill {
     pub evidence_digest: Option<String>,
     #[serde(default)]
     pub requires: Vec<String>,
+    /// `user` or `project` (pinned locks).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<String>,
+    /// Where the skill was installed, as a portable path (`{root}/skills/x`, `~/…`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    /// Copy of the skill next to the lock (`.hlock/vendor/…`), for skills with no fetchable source.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vendored: Option<String>,
 }
 
 fn default_true() -> bool {
@@ -103,6 +139,80 @@ pub struct Instructions {
     pub name: String,
     pub digest: Option<String>,
     pub scope: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vendored: Option<String>,
+}
+
+/// A harness-native component: plugin, package, extension, or marketplace (§5.3).
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(default)]
+pub struct Native {
+    /// Namespaced kind, e.g. `claude-code.plugin`, `pi.package`, `opencode.plugin`.
+    pub kind: String,
+    pub name: String,
+    pub version: Option<String>,
+    pub source: Option<String>,
+    pub revision: Option<String>,
+    pub integrity: Option<String>,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Extra harness-specific settings (e.g. a Pi package's extension filter).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub config: Option<serde_json::Value>,
+}
+
+/// A local inference runtime and the models the harness uses on it (pinned locks).
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(default)]
+pub struct Runtime {
+    pub name: String,
+    /// `local` (this machine) or `network` (a self-hosted server on a private network).
+    pub location: String,
+    pub version: Option<String>,
+    pub source: Option<String>,
+    pub endpoint: Option<String>,
+    #[serde(default)]
+    pub model: Vec<RuntimeModel>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(default)]
+pub struct RuntimeModel {
+    pub id: String,
+    /// Where the weights come from: `ollama:qwen3:8b`, `hf://org/repo`, …
+    pub source: Option<String>,
+    pub revision: Option<String>,
+    pub digest: Option<String>,
+    #[serde(rename = "size-bytes")]
+    pub size_bytes: Option<u64>,
+    /// Whether the weights were found in the runtime's local store at pin time.
+    pub present: bool,
+}
+
+/// A harness config file captured by `hlock pin`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(default)]
+pub struct ConfigFile {
+    /// The profile's file id (`settings`, `state`, …).
+    pub id: String,
+    pub path: String,
+    pub format: String,
+    /// `whole` | `pointers` | `record`
+    pub restore: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pointers: Vec<String>,
+    pub digest: Option<String>,
+    /// Redacted copy next to the lock that `sync` restores from.
+    pub vendored: Option<String>,
+}
+
+/// A secret `pin` replaced with a placeholder; `sync`/`launch` fill it from the environment.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(default, rename_all = "kebab-case")]
+pub struct SecretRef {
+    /// The environment variable that supplies it (`HLOCK_SECRET_…`).
+    pub name: String,
+    pub used_by: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -185,6 +295,15 @@ pub struct Lockfile {
     pub verify: Verify,
     #[serde(default)]
     pub provenance: Provenance,
+    // Pinned-lock sections (`hlock pin`, SPEC §7.8.4); empty in resolved locks.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub native: Vec<Native>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub runtime: Vec<Runtime>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub config: Vec<ConfigFile>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub secret: Vec<SecretRef>,
     /// Optimization-only fields (see §5.9 / `harness.opt.lock`).
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "base-lock")]
     pub base_lock: Option<String>,
@@ -213,6 +332,10 @@ impl Default for Lockfile {
             evidence: Evidence::default(),
             verify: Verify::default(),
             provenance: Provenance::default(),
+            native: Vec::new(),
+            runtime: Vec::new(),
+            config: Vec::new(),
+            secret: Vec::new(),
             base_lock: None,
             kind: None,
             optimize: None,
@@ -252,6 +375,11 @@ impl Lockfile {
         let body = toml::to_string(self).map_err(|e| Error::Lockfile(e.to_string()))?;
         std::fs::write(path, format!("{HEADER}\n{body}"))?;
         Ok(())
+    }
+
+    /// True for locks written by `hlock pin` (no manifest, no evidence).
+    pub fn is_pin(&self) -> bool {
+        self.kind.as_deref() == Some("pin")
     }
 
     pub fn default_path(&self) -> &str {
