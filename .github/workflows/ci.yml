@@ -27,23 +27,17 @@ jobs:
         python-version: ["3.9", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-      # `maturin develop` installs into a virtualenv and refuses to run without one.
-      - name: Create a virtualenv
-        run: |
-          python -m venv .venv
-          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
-          echo "VIRTUAL_ENV=$PWD/.venv" >> "$GITHUB_ENV"
-      - name: Install build deps
-        run: pip install maturin click rich rich-click pytest ruff
-      - name: Build & install the extension
-        run: maturin develop -m crates/harness-lock-py/Cargo.toml
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: astral-sh/setup-uv@v6
+      # Same commands as docs/project/development.md: build the extension and
+      # install the locked dev group, then test and lint.
+      - name: Build & install (uv sync)
+        run: uv sync --locked --python ${{ matrix.python-version }}
       - name: Unit tests
-        run: python -m pytest tests -q
+        run: uv run --no-sync pytest -q
       - name: Lint
-        run: ruff check harness_lock tests packaging/hlock
+        run: uv run --no-sync ruff check harness_lock tests packaging/hlock
 
   # Catches a broken release in review rather than at tag time: versions agree, the
   # wheel, sdist, and hlock alias build, pass `twine check`, install, and run, and
