@@ -3,7 +3,7 @@
 These prove the seam ``hlock optimize --backend devbox|cluster`` uses: the Rust core
 shells a trial out to the Python worker over a versioned JSON contract and
 consumes the response. They run entirely offline — the worker's LLM call falls
-back to the deterministic reference RNG when no ``AL_LLM_BASE_URL`` is set, and
+back to the deterministic reference RNG when no ``HL_LLM_BASE_URL`` is set, and
 the Flyte lift degrades to in-process when the ``flyte`` SDK is absent.
 """
 
@@ -83,7 +83,7 @@ def test_worker_contract_bad_version():
         ("ft.lora", "available"),
     ],
 )
-def test_worker_contract_handlers(kind, key):
+def test_worker_contract_handlers(kind, key, tmp_path):
     resp = run_worker(
         {
             "version": 1,
@@ -93,7 +93,7 @@ def test_worker_contract_handlers(kind, key):
             "task": {"id": "t", "expected": []},
             "stack": {"llm": {"planner": "reference:qwen-7b"}},
             "seed": 0,
-            "workdir": str(REPO / "tasks"),
+            "workdir": str(tmp_path),
             "plan": {},
         }
     )
@@ -104,7 +104,7 @@ def test_worker_contract_handlers(kind, key):
 def test_optimize_backend_devbox(tmp_path, monkeypatch):
     """End-to-end: Rust core -> Python worker -> harness.opt.lock, offline."""
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("AL_PYTHON", sys.executable)  # pin the interpreter the worker runs under
+    monkeypatch.setenv("HL_PYTHON", sys.executable)  # pin the interpreter the worker runs under
 
     manifest = f"""[project]
 name = "worker-e2e"
@@ -140,3 +140,86 @@ max_trials = 1
 
     lf = hlock.Lockfile.load(str(tmp_path / "harness.opt.lock"))
     assert json.loads(lf.to_json())["kind"] == "optimized"
+
+
+def test_worker_contract_prompt_search_digests():
+    """prompt.search must produce a real selected prompt + before/after digests."""
+    resp = run_worker(
+        {
+            "version": 1,
+            "kind": "prompt.search",
+            "backend": "local",
+            "task": {"id": "t", "prompt_text": "write a summary"},
+            "seed": 0,
+            "workdir": ".",
+            "plan": {},
+        }
+    )
+    assert resp["ok"] is True, resp
+    md = resp["result"]["model_digests"]
+    assert md["available"] is True
+    assert md["best_prompt"] and md["best_prompt"].startswith("Be concise")  # chosen instruction
+    assert str(md["before_digest"]).startswith("sha256:")
+    assert str(md["after_digest"]).startswith("sha256:")
+    assert md["after_digest"] != md["before_digest"]  # real (changed) prompt
+
+
+def test_worker_contract_data_load_split():
+    """data.load normalizes traces into a content-hashed train/val/test split."""
+    resp = run_worker(
+        {
+            "version": 1,
+            "kind": "data.load",
+            "backend": "local",
+            "data": {"source": "user"},
+            "seed": 0,
+            "workdir": "/tmp/hl_dataload_test",
+            "plan": {},
+        }
+    )
+    # no trace files -> empty but well-formed split
+    assert resp["ok"] is True, resp
+    md = resp["result"]["model_digests"]
+    assert "rows" in md and "digest" in md and "split" in md
+    assert set(md["split"]) == {"train", "val", "test"}
+
+
+def test_optimize_depth_prompt_devbox(tmp_path, monkeypatch):
+    """depth=prompt drives the data + prompt.search stages, writing real digests."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HL_PYTHON", sys.executable)
+    monkeypatch.setenv("HL_LLM_BASE_URL", "")  # ensure deterministic reference path
+
+    manifest = f"""[project]
+name = "prompt-e2e"
+
+[tasks]
+packs = ["{REPO / 'tasks'}"]
+seeds = 1
+
+[candidates.llm.planner]
+any_of = ["reference:qwen-7b"]
+
+[candidates]
+decision = ["none"]
+harness = ["reference"]
+
+[objective]
+primary = "success-rate"
+select = "min-cost"
+
+[budget]
+strategy = "grid"
+max_trials = 2
+"""
+    (tmp_path / "harnesslock.toml").write_text(manifest)
+
+    import harness_lock as hlock
+
+    json.loads(hlock.optimize(backend="devbox", depth="prompt", data="synthetic:2", max_trials=2))
+    d = json.loads(hlock.Lockfile.load(str(tmp_path / "harness.opt.lock")).to_json())
+    applied = d["optimize"]["prompt"]["applied"]
+    assert applied and applied[0]["_placeholder"] is False  # real prompt search ran
+    after = applied[0]["after"]
+    assert after.startswith("sha256:") and after != applied[0]["before"]
+    assert d["optimize"]["data"]["mode"] == "synthetic"

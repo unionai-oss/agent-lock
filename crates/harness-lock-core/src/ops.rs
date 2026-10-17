@@ -249,8 +249,9 @@ impl OptimizeSpec {
     }
 }
 
-/// Grid axes searched by `optimize` (model x retries). Deeper depths broaden the grid.
-fn search_grid(manifest: &Manifest, depth: &str) -> Vec<(String, u32)> {
+/// Grid axes searched by `optimize`. Deeper depths broaden the grid.
+/// Returns `(model, retries, temperature, tool_timeout_seconds)`.
+fn search_grid(manifest: &Manifest, depth: &str) -> Vec<(String, u32, f64, Option<u64>)> {
     let mut models: Vec<String> = manifest
         .candidates
         .llm
@@ -266,19 +267,40 @@ fn search_grid(manifest: &Manifest, depth: &str) -> Vec<(String, u32)> {
     let retries: Vec<u32> = match depth {
         "probe" => vec![0],
         "prompt" => vec![0, 1],
-        "hpo" | "ft" | "full" => vec![0, 1, 3],
-        _ => vec![0, 1, 3],
+        _ => vec![0, 1, 3], // hpo | ft | full
+    };
+    // temperature is an HPO axis only once we are doing hyperparameter search
+    let temps: Vec<f64> = if matches!(depth, "hpo" | "ft" | "full") {
+        vec![0.2, 0.7]
+    } else {
+        vec![0.2]
+    };
+    // tool timeout-seconds is a full-depth HPO axis
+    let timeouts: Vec<Option<u64>> = if depth == "full" {
+        vec![Some(30), Some(120)]
+    } else {
+        vec![Some(120)]
     };
     let mut out = Vec::new();
     for m in &models {
         for &r in &retries {
-            out.push((m.clone(), r));
+            for &t in &temps {
+                for &tt in &timeouts {
+                    out.push((m.clone(), r, t, tt));
+                }
+            }
         }
     }
     out
 }
 
 /// `hlock optimize` -> `harness.opt.lock` (§5.9).
+///
+/// Runs the depth-aware pipeline: **data** -> (depth>=prompt) **prompt search** ->
+/// **HPO trials** -> (depth>=ft) **LoRA fine-tune** -> (depth==full) **holdout
+/// re-validation**, on the configured backend. On `cluster`/Union the heavy stages
+/// are lifted to real Flyte tasks by the Python worker (GPUs for fine-tuning,
+/// images, caching), and their provenance/digests are recorded in the opt-lock.
 pub fn optimize(manifest: Manifest, spec: &OptimizeSpec) -> Result<OptimizeOutcome> {
     let depth = spec.resolved_depth().to_string();
     let backend = crate::worker::Backend::parse(
@@ -300,9 +322,60 @@ pub fn optimize(manifest: Manifest, spec: &OptimizeSpec) -> Result<OptimizeOutco
     let n_synthetic = parse_synthetic(&spec.data);
     let data_mode = if n_synthetic > 0 { "synthetic" } else { "user-traces" };
 
-    // run the grid
-    let mut scored: Vec<(String, u32, f64, f64, usize)> = Vec::new(); // (model,retries,success,cost,trials)
-    for (model, retries) in search_grid(&manifest, &depth) {
+    let worker = if backend.needs_worker() {
+        Some(crate::worker::PythonWorker::new())
+    } else {
+        None
+    };
+    let plan_value = serde_json::json!({
+        "depth": depth,
+        "data": spec.data,
+        "data_mode": data_mode,
+        "harness": spec.harness,
+        "max_trials": spec.max_trials,
+        "axes": {
+            "retries": if depth == "probe" { serde_json::json!([0]) } else { serde_json::json!([0,1,3]) },
+            "temperature": if matches!(depth.as_str(), "hpo" | "ft" | "full") { serde_json::json!([0.2,0.7]) } else { serde_json::json!([0.2]) },
+            "tool_timeout_seconds": if depth == "full" { serde_json::json!([30,120]) } else { serde_json::json!([120]) },
+        },
+    });
+
+    // ---- stage 1: data (user traces or synthetic) ----
+    let mut data_meta = serde_json::json!({});
+    if let Some(w) = &worker {
+        let kind = if n_synthetic > 0 { "data.synthetic" } else { "data.load" };
+        let ws = ws_root.join("stage_data");
+        match stage_run(w, backend.as_str(), kind, &ws, &plan_value) {
+            Ok(v) => data_meta = v,
+            Err(Error::Worker(e)) => eprintln!("warn: optimize data stage: {e}"),
+            Err(e) => return Err(e),
+        }
+    } else {
+        data_meta = serde_json::json!({ "_placeholder": true, "rows": 0 });
+    }
+
+    // ---- stage 2: prompt search (depth >= prompt) ----
+    let mut prompt_meta = serde_json::json!({});
+    let mut optimized_prompt: Vec<String> = Vec::new();
+    if prompt_depth(&depth) {
+        if let Some(w) = &worker {
+            let ws = ws_root.join("stage_prompt");
+            match stage_run(w, backend.as_str(), "prompt.search", &ws, &plan_value) {
+                Ok(v) => {
+                    if let Some(p) = v.get("best_prompt").and_then(serde_json::Value::as_str) {
+                        optimized_prompt = vec![p.to_string()];
+                    }
+                    prompt_meta = v;
+                }
+                Err(Error::Worker(e)) => eprintln!("warn: optimize prompt stage: {e}"),
+                Err(e) => return Err(e),
+            }
+        }
+    }
+
+    // ---- stage 3: HPO trials over the grid ----
+    let mut scored: Vec<(String, u32, f64, Option<u64>, f64, f64, usize)> = Vec::new();
+    for (model, retries, temp, tto) in search_grid(&manifest, &depth) {
         let stack = Stack {
             llm: BTreeMap::from([("planner".to_string(), format!("reference:{model}"))]),
             harness: spec.harness.clone().unwrap_or_else(|| "reference".into()),
@@ -310,11 +383,12 @@ pub fn optimize(manifest: Manifest, spec: &OptimizeSpec) -> Result<OptimizeOutco
             decision: manifest.candidates.decision.first().cloned().unwrap_or_else(|| "none".into()),
             tools: manifest.tools.keys().cloned().collect(),
             skills: manifest.skills.keys().cloned().collect(),
-            instructions: Vec::new(),
+            instructions: optimized_prompt.clone(),
             max_steps: 40,
             max_cost_usd_per_task: None,
             retries,
-            temperature: Some(0.2),
+            temperature: Some(temp),
+            tool_timeout_seconds: tto,
         };
         let mut ok = 0u64;
         let mut n = 0u64;
@@ -340,15 +414,15 @@ pub fn optimize(manifest: Manifest, spec: &OptimizeSpec) -> Result<OptimizeOutco
             }
         }
         if n > 0 {
-            scored.push((model, retries, ok as f64 / n as f64, cost / n as f64, n as usize));
+            scored.push((model, retries, temp, tto, ok as f64 / n as f64, cost / n as f64, n as usize));
         }
     }
 
     // pick best (highest success, then lowest cost)
     let best = scored
         .iter()
-        .max_by(|a, b| a.2.partial_cmp(&b.2).unwrap().then(b.3.partial_cmp(&a.3).unwrap()));
-    let Some((bm, br, bs, bc, bn_trials)) = best.cloned() else {
+        .max_by(|a, b| a.4.partial_cmp(&b.4).unwrap().then(b.5.partial_cmp(&a.5).unwrap()));
+    let Some((bm, br, btemp, btto, bs, bc, bn_trials)) = best.cloned() else {
         return Err(Error::Tuning("optimize produced no candidate".into()));
     };
 
@@ -358,7 +432,6 @@ pub fn optimize(manifest: Manifest, spec: &OptimizeSpec) -> Result<OptimizeOutco
         )));
     }
 
-    // build the optimized stack lock
     let winner_stack = Stack {
         llm: BTreeMap::from([("planner".to_string(), format!("reference:{bm}"))]),
         harness: spec.harness.clone().unwrap_or_else(|| "reference".into()),
@@ -366,24 +439,74 @@ pub fn optimize(manifest: Manifest, spec: &OptimizeSpec) -> Result<OptimizeOutco
         decision: manifest.candidates.decision.first().cloned().unwrap_or_else(|| "none".into()),
         tools: manifest.tools.keys().cloned().collect(),
         skills: manifest.skills.keys().cloned().collect(),
-        instructions: Vec::new(),
+        instructions: optimized_prompt.clone(),
         max_steps: 40,
         max_cost_usd_per_task: None,
         retries: br,
-        temperature: Some(0.2),
+        temperature: Some(btemp),
+        tool_timeout_seconds: btto,
     };
+
+    // ---- stage 4: fine-tune (depth >= ft) ----
+    let mut ft_meta = serde_json::json!({});
+    if ft_depth(&depth) {
+        if let Some(w) = &worker {
+            let ws = ws_root.join("stage_ft");
+            let ft_plan = serde_json::json!({
+                "depth": depth,
+                "data": spec.data,
+                "data_mode": data_mode,
+                "trainset_digest": data_meta.get("digest").cloned().unwrap_or(serde_json::Value::Null),
+            });
+            match stage_run(w, backend.as_str(), "ft.lora", &ws, &ft_plan) {
+                Ok(v) => ft_meta = v,
+                Err(Error::Worker(e)) => eprintln!("warn: optimize fine-tune stage: {e}"),
+                Err(e) => return Err(e),
+            }
+        }
+    }
+
+    // ---- stage 5: holdout re-validation (depth == full) ----
+    let (es, ec, en, esplit) = if depth == "full" {
+        let hold = tuner.holdout();
+        if hold.is_empty() {
+            (bs, bc, bn_trials as usize, "search".to_string())
+        } else {
+            let mut ok = 0u64;
+            let mut n = 0u64;
+            let mut cost = 0.0;
+            for task in hold {
+                for seed in 0..seeds {
+                    let tr = tuner.run_trial(&winner_stack, task, seed, &ws_root);
+                    if tr.success {
+                        ok += 1;
+                    }
+                    cost += tr.cost_usd;
+                    n += 1;
+                }
+            }
+            (ok as f64 / n.max(1) as f64, cost / (n as f64).max(1.0), n as usize, "holdout".to_string())
+        }
+    } else {
+        (bs, bc, bn_trials as usize, "search".to_string())
+    };
+
     let opt_lock = build_optimized_resolve(
         &manifest,
         winner_stack,
-        bs,
-        bc,
+        es,
+        ec,
         &base_lock,
         &data_mode,
         &spec.data,
         &depth,
         scored.len(),
-        bn_trials,
+        en,
         backend.as_str(),
+        &prompt_meta,
+        &ft_meta,
+        &data_meta,
+        &esplit,
     );
 
     let out_path = &spec.out;
@@ -401,10 +524,11 @@ pub fn optimize(manifest: Manifest, spec: &OptimizeSpec) -> Result<OptimizeOutco
         "data": spec.data,
         "data_mode": data_mode,
         "backend": backend.as_str(),
+        "eval_split": esplit,
         "grid": scored.len(),
-        "best": {"model": bm, "retries": br, "success_rate": bs, "cost_usd": bc, "trials": bn_trials},
+        "best": {"model": bm, "retries": br, "temperature": btemp, "tool_timeout_seconds": btto, "success_rate": es, "cost_usd": ec, "trials": en},
         "baseline_success_rate": baseline_sr,
-        "gain_success_rate": bs - baseline_sr,
+        "gain_success_rate": es - baseline_sr,
         "path": out_path.to_string_lossy(),
         "applied": spec.apply,
     });
@@ -433,36 +557,47 @@ fn build_optimized_resolve(
     grid_size: usize,
     trials: usize,
     backend: &str,
+    prompt_meta: &serde_json::Value,
+    ft_meta: &serde_json::Value,
+    data_meta: &serde_json::Value,
+    eval_split: &str,
 ) -> Lockfile {
     let mut success_map = BTreeMap::new();
     success_map.insert("mean".to_string(), (success * 1e4).round() / 1e4);
     let mut cost_map = BTreeMap::new();
     cost_map.insert("mean".to_string(), (cost * 1e6).round() / 1e6);
 
-    // Prompt and fine-tune digests are NOT yet computed by a real prompt-search /
-    // LoRA step at v0.1 — they are flagged as placeholders so readers never mistake
-    // them for measured evidence. Trial metrics (success/cost), by contrast, ARE
-    // measured (either by the reference harness or the Python worker).
+    // Prompt + fine-tune digests come from the real worker stages when they ran
+    // (prompt.search / ft.lora); only when a depth demands a stage but there was
+    // no worker (pure-local) do we fall back to a flagged placeholder.
     let mut proof_prompt = Vec::new();
-    if matches!(depth, "prompt" | "hpo" | "ft" | "full") {
+    if prompt_depth(depth) {
+        let placeholder = prompt_meta
+            .get("_placeholder")
+            .map(|_| true)
+            .or_else(|| prompt_meta.get("best_prompt").map(|_| false))
+            .unwrap_or(true);
         proof_prompt.push(serde_json::json!({
             "component": "harness.system-prompt",
-            "before": sha256_text("base system prompt"),
-            "after": sha256_text("optimized system prompt (depth >= prompt)"),
+            "before": str_field(prompt_meta, "before_digest").unwrap_or_else(|| sha256_text("base system prompt")),
+            "after": str_field(prompt_meta, "after_digest").unwrap_or_else(|| sha256_text("optimized system prompt (depth >= prompt)")),
             "gain": {"success-rate": format!("{success:+.2}")},
-            "_placeholder": true,
+            "_placeholder": placeholder,
         }));
     }
+
     let mut finetune = Vec::new();
-    if depth == "ft" || depth == "full" {
+    if ft_depth(depth) {
+        let placeholder = ft_meta.get("adapter_digest").is_none()
+            || ft_meta.get("_placeholder").is_some();
         finetune.push(serde_json::json!({
             "target": "decision",
-            "base": "hf://hlock/decider-1.5b",
+            "base": str_field(ft_meta, "base_model").unwrap_or_else(|| "hf://hlock/decider-1.5b".into()),
             "data": format!("traces://{data_arg}"),
-            "adapter": {"lora": "store://sha256:PLAN"},
-            "samples": 0,
-            "loss": 0.0,
-            "_placeholder": true,
+            "adapter": {"lora": str_field(ft_meta, "adapter_digest").unwrap_or_else(|| "store://sha256:PLAN".into())},
+            "samples": num_field(ft_meta, "samples").unwrap_or(0.0) as i64,
+            "loss": num_field(ft_meta, "loss").unwrap_or(0.0),
+            "_placeholder": placeholder,
         }));
     }
 
@@ -490,7 +625,11 @@ fn build_optimized_resolve(
         provider: "reference".into(),
         model: stack.llm.get("planner").cloned().unwrap_or_default(),
         resolved_from: None,
-        params: BTreeMap::from([("retries".to_string(), serde_json::json!(stack.retries)), ("temperature".to_string(), serde_json::json!(0.2))]),
+        params: BTreeMap::from([
+            ("retries".to_string(), serde_json::json!(stack.retries)),
+            ("temperature".to_string(), serde_json::json!(stack.temperature.unwrap_or(0.2))),
+            ("tool_timeout_seconds".to_string(), serde_json::json!(stack.tool_timeout_seconds.unwrap_or(120))),
+        ]),
         fingerprint: None,
     }];
     lf.policy = crate::lockfile::Policy {
@@ -501,24 +640,108 @@ fn build_optimized_resolve(
     };
     lf.evidence = Evidence {
         task_pack: Some(manifest.task_packs().join(",")),
-        split: "holdout".into(),
+        split: eval_split.into(),
         trials,
         success_rate: success_map,
         cost_usd_per_task: cost_map,
         ..Default::default()
     };
+
+    // data provenance (real digest/rows/split when a worker stage ran)
+    let mut data_block = serde_json::json!({"source": data_arg, "mode": data_mode, "redact": true});
+    if let Some(d) = data_meta.get("digest").and_then(serde_json::Value::as_str) {
+        data_block["digest"] = serde_json::json!(d);
+    }
+    if let Some(v) = data_meta.get("rows") {
+        data_block["rows"] = v.clone();
+    }
+    if let Some(v) = data_meta.get("split") {
+        data_block["split"] = v.clone();
+    }
+    if data_meta.get("_placeholder").is_some() {
+        data_block["_placeholder"] = serde_json::json!(true);
+    }
+
+    // provenance: union run ids + budget (gpu-h / spend) aggregated across stages
+    let mut run_ids: Vec<String> = Vec::new();
+    for m in [prompt_meta, ft_meta, data_meta] {
+        if let Some(r) = m.get("run").and_then(serde_json::Value::as_str) {
+            run_ids.push(r.to_string());
+        }
+    }
+    let run = if run_ids.is_empty() {
+        format!("worker://{backend}")
+    } else {
+        run_ids.join(",")
+    };
+    let stage_gpu: f64 = [prompt_meta, ft_meta, data_meta]
+        .iter()
+        .map(|m| num_field(m, "gpu_h").unwrap_or(0.0))
+        .sum();
+    let stage_spend: f64 = [prompt_meta, ft_meta, data_meta]
+        .iter()
+        .map(|m| num_field(m, "cost_usd").unwrap_or(0.0))
+        .sum();
+    let spend = cost * trials as f64 + stage_spend;
+
     lf.optimize = Some(serde_json::json!({
         "hpo": {
-            "axes": {"retries": [0,1,3]},
+            "axes": {
+                "retries": [0,1,3],
+                "temperature": [0.2,0.7],
+                "tool_timeout_seconds": [30,120],
+            },
             "trials": grid_size,
-            "best": {"model": stack.llm.get("planner"), "retries": stack.retries},
+            "best": {"model": stack.llm.get("planner"), "retries": stack.retries, "temperature": stack.temperature, "tool_timeout_seconds": stack.tool_timeout_seconds},
         },
         "prompt": {"applied": proof_prompt},
         "finetune": finetune,
-        "data": {"source": data_arg, "mode": data_mode, "redact": true},
-        "provenance": {"run": format!("worker://{backend}"), "budget": {"spend-usd": 0.0, "gpu-h": 0.0}},
+        "data": data_block,
+        "provenance": {"run": run, "budget": {"spend-usd": round6(spend), "gpu-h": round6(stage_gpu)}},
     }));
     lf
+}
+
+fn round6(v: f64) -> f64 {
+    (v * 1e6).round() / 1e6
+}
+
+fn str_field(v: &serde_json::Value, key: &str) -> Option<String> {
+    v.get(key).and_then(serde_json::Value::as_str).map(|s| s.to_string())
+}
+
+fn num_field(v: &serde_json::Value, key: &str) -> Option<f64> {
+    v.get(key).and_then(serde_json::Value::as_f64)
+}
+
+/// Depth ladder: does `depth` include prompt search?
+fn prompt_depth(depth: &str) -> bool {
+    matches!(depth, "prompt" | "hpo" | "ft" | "full")
+}
+
+/// Depth ladder: does `depth` include fine-tuning?
+fn ft_depth(depth: &str) -> bool {
+    matches!(depth, "ft" | "full")
+}
+
+/// Run a single stage against the Python worker and normalize its metadata.
+fn stage_run(
+    worker: &crate::worker::PythonWorker,
+    backend: &str,
+    kind: &str,
+    ws: &PathBuf,
+    plan: &serde_json::Value,
+) -> Result<serde_json::Value> {
+    let r = worker.call(kind, backend, None, None, 0, ws, plan)?;
+    let mut m = r.model_digests;
+    if m.is_null() {
+        m = serde_json::json!({});
+    }
+    if let Some(o) = m.as_object_mut() {
+        o.insert("gpu_h".into(), serde_json::json!(r.gpu_h));
+        o.insert("cost_usd".into(), serde_json::json!(r.cost_usd));
+    }
+    Ok(m)
 }
 
 fn parse_synthetic(data: &str) -> usize {

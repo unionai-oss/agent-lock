@@ -110,21 +110,15 @@ pub struct TaskResponse {
 
 /// A `HarnessAdapter` that delegates each trial to the Python worker.
 ///
-/// The interpreter is taken from `AL_PYTHON` (falling back to `python3`) so it
-/// can be pinned to the interpreter that actually has `harness_lock` installed
-/// (e.g. a project venv), independent of the interpreter the Rust wheel itself
-/// runs inside.
+/// Thin wrapper over [`PythonWorker`] for the trial path (kind `llm.run_trial`).
 pub struct PythonAdapter {
-    interp: String,
-    module: String,
+    worker: PythonWorker,
 }
 
 impl PythonAdapter {
     pub fn new() -> Self {
-        let interp = std::env::var("AL_PYTHON").unwrap_or_else(|_| "python3".to_string());
         PythonAdapter {
-            interp,
-            module: "harness_lock.tasks.worker".to_string(),
+            worker: PythonWorker::new(),
         }
     }
 }
@@ -141,6 +135,54 @@ impl HarnessAdapter for PythonAdapter {
     }
 
     fn run(&self, stack: &Stack, task: &Task, workspace: &Path, seed: u64) -> Result<RunOutcome> {
+        let r = self
+            .worker
+            .call("llm.run_trial", "cluster", Some(stack), Some(task), seed, workspace, &json!({}))?;
+        Ok(RunOutcome {
+            success: r.success,
+            cost_usd: r.cost_usd,
+            latency_s: r.latency_s,
+            steps: r.steps,
+            trace: r.trace,
+        })
+    }
+}
+
+/// Shells any work item out to the Python worker over the versioned JSON contract.
+///
+/// Used by the tuner (as `PythonAdapter`) for trials and directly by `ops::optimize`
+/// for the data / prompt / fine-tune stages of the pipeline.
+///
+/// The interpreter is taken from `HL_PYTHON` (falling back to `python3`) so it can
+/// be pinned to the interpreter that actually has `harness_lock` installed (e.g. a
+/// project venv), independent of the interpreter the Rust wheel itself runs inside.
+pub struct PythonWorker {
+    interp: String,
+    module: String,
+}
+
+impl PythonWorker {
+    pub fn new() -> Self {
+        let interp = std::env::var("HL_PYTHON").unwrap_or_else(|_| "python3".to_string());
+        PythonWorker {
+            interp,
+            module: "harness_lock.tasks.worker".to_string(),
+        }
+    }
+
+    /// Invoke the worker for `kind`, writing a request into `workspace`, and return
+    /// the parsed result. `plan` carries the depth/data/axes so the worker is
+    /// depth-aware on devbox/cluster.
+    pub fn call(
+        &self,
+        kind: &str,
+        backend: &str,
+        stack: Option<&Stack>,
+        task: Option<&Task>,
+        seed: u64,
+        workspace: &Path,
+        plan: &serde_json::Value,
+    ) -> Result<TaskResult> {
         let req_path = workspace.join("_al_request.json");
         let out_path = workspace.join("_al_response.json");
         if let Some(parent) = req_path.parent() {
@@ -149,18 +191,21 @@ impl HarnessAdapter for PythonAdapter {
 
         let request = TaskRequest {
             version: CONTRACT_VERSION,
-            kind: "llm.run_trial".into(),
-            backend: "cluster".into(), // this adapter only drives devbox/cluster work
-            stack: stack.to_value(),
-            task: json!({
-                "id": task.id,
-                "prompt_text": task.prompt_text,
-                "expected": task.expected_artifacts(),
-                "fixtures": task.fixtures.as_ref().map(|p| p.to_string_lossy().to_string()),
-            }),
+            kind: kind.to_string(),
+            backend: backend.to_string(),
+            stack: stack.map(|s| s.to_value()).unwrap_or(json!({})),
+            task: task.map(|t| {
+                json!({
+                    "id": t.id,
+                    "prompt_text": t.prompt_text,
+                    "expected": t.expected_artifacts(),
+                    "fixtures": t.fixtures.as_ref().map(|p| p.to_string_lossy().to_string()),
+                })
+            })
+            .unwrap_or(json!({})),
             seed,
             workdir: workspace.to_string_lossy().to_string(),
-            plan: json!({}),
+            plan: plan.clone(),
         };
         std::fs::write(&req_path, serde_json::to_vec(&request)?)?;
 
@@ -194,15 +239,13 @@ impl HarnessAdapter for PythonAdapter {
                 resp.error.unwrap_or_else(|| "worker reported failure".into()),
             ));
         }
-        let r = resp
-            .result
-            .ok_or_else(|| Error::Worker("worker returned no result".into()))?;
-        Ok(RunOutcome {
-            success: r.success,
-            cost_usd: r.cost_usd,
-            latency_s: r.latency_s,
-            steps: r.steps,
-            trace: r.trace,
-        })
+        resp.result.ok_or_else(|| Error::Worker("worker returned no result".into()))
     }
 }
+
+impl Default for PythonWorker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+

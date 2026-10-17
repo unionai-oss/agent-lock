@@ -23,6 +23,7 @@ pub struct Tuner {
     pub backend: Backend,
     pack_by_task: BTreeMap<String, crate::tasks::TaskPack>,
     adapter: Box<dyn HarnessAdapter>,
+    holdout: Vec<crate::tasks::Task>,
 }
 
 impl Tuner {
@@ -49,6 +50,7 @@ impl Tuner {
             backend,
             pack_by_task: BTreeMap::new(),
             adapter,
+            holdout: Vec::new(),
         }
     }
 
@@ -59,16 +61,22 @@ impl Tuner {
         for ref_ in self.manifest.task_packs() {
             match TaskPack::load(&ref_, Some(&base)) {
                 Ok(pack) => {
-                    let (s, _h) = pack.split(self.manifest.search_frac(), self.manifest.budget.random_seed);
+                    let (s, h) = pack.split(self.manifest.search_frac(), self.manifest.budget.random_seed);
                     for t in pack.tasks.clone() {
                         self.pack_by_task.insert(t.id.clone(), pack.clone());
                     }
                     search.extend(s);
+                    self.holdout.extend(h);
                 }
                 Err(e) => eprintln!("warn: skipping task pack {ref_}: {e}"),
             }
         }
         search
+    }
+
+    /// The holdout-split tasks (populated by [`load_packs`]).
+    pub fn holdout(&self) -> &[crate::tasks::Task] {
+        &self.holdout
     }
 
     /// Cartesian product over the manifest's candidate axes.
@@ -98,6 +106,7 @@ impl Tuner {
                         max_cost_usd_per_task: None,
                         retries: policy_axis(&self.manifest.candidates.policy, "retries", 0),
                         temperature: policy_axis_float(&self.manifest.candidates.policy, "temperature"),
+                        tool_timeout_seconds: None,
                     });
                 }
             }
