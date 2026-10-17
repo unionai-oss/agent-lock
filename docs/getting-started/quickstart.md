@@ -11,8 +11,8 @@ is measured against. Grab the demo pack from the repository:
 
 ```bash
 mkdir hlock-demo && cd hlock-demo
-git clone --depth 1 https://github.com/unionai-oss/harness-lock /tmp/harness-lock
-cp -r /tmp/harness-lock/tasks ./tasks
+git clone --depth 1 https://github.com/unionai-oss/hlock /tmp/hlock
+cp -r /tmp/hlock/tasks ./tasks
 ```
 
 It holds two tasks, `clean_csv` and `summarize_report`, each with a prompt and an

@@ -5,11 +5,11 @@
 
 [project]
 site_name = "hlock"
-site_description = "Lock your agent into place: tune your agent stack against your own tasks, then pin the winner in a harness.lock."
-site_url = "https://unionai-oss.github.io/harness-lock/"
+site_description = "Make your agent harness setup pinnable and portable. Tune your agent stack against your own tasks, then pin the winner in a harness.lock."
+site_url = "https://unionai-oss.github.io/hlock/"
 site_author = "Union.ai"
-repo_url = "https://github.com/unionai-oss/harness-lock"
-repo_name = "unionai-oss/harness-lock"
+repo_url = "https://github.com/unionai-oss/hlock"
+repo_name = "unionai-oss/hlock"
 edit_uri = "edit/main/docs/"
 copyright = "Copyright &copy; 2026 Union.ai · Apache-2.0"
 extra_css = ["stylesheets/extra.css"]
@@ -41,13 +41,13 @@ nav = [
   { "Project" = [
     "project/development.md",
     "project/releasing.md",
-    { "Design spec" = "https://github.com/unionai-oss/harness-lock/blob/main/SPEC.md" },
+    { "Design spec" = "https://github.com/unionai-oss/hlock/blob/main/SPEC.md" },
   ] },
 ]
 
 [project.theme]
 language = "en"
-logo = "assets/logo.svg"
+logo = "assets/logo-animated.svg"
 favicon = "assets/logo.svg"
 features = [
   "content.action.edit",
@@ -91,7 +91,7 @@ toggle.name = "Switch to system preference"
 
 [project.extra]
 social = [
-  { icon = "fontawesome/brands/github", link = "https://github.com/unionai-oss/harness-lock" },
+  { icon = "fontawesome/brands/github", link = "https://github.com/unionai-oss/hlock" },
   { icon = "fontawesome/brands/python", link = "https://pypi.org/project/hlock/" },
   { icon = "fontawesome/brands/rust", link = "https://crates.io/crates/hlock" },
 ]

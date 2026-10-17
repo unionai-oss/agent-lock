@@ -1,22 +1,24 @@
 <div align="center">
 
-# 🔒 hlock
+<img src="https://raw.githubusercontent.com/unionai-oss/hlock/main/docs/assets/logo-animated.svg" alt="hlock logo" width="120">
 
-### Lock your agent into place.
+# hlock
+
+### Make your agent harness setup pinnable and portable.
 
 **Tune your agent stack against your own tasks, then pin the winner in a `harness.lock`.**
 
 [![PyPI](https://img.shields.io/pypi/v/hlock?label=pypi&color=3775A9&logo=pypi&logoColor=white)](https://pypi.org/project/hlock/)
 [![crates.io](https://img.shields.io/crates/v/hlock?color=E6532D&logo=rust&logoColor=white)](https://crates.io/crates/hlock)
-[![CI](https://img.shields.io/github/actions/workflow/status/unionai-oss/harness-lock/ci.yml?branch=main&label=ci&logo=github)](https://github.com/unionai-oss/harness-lock/actions/workflows/ci.yml)
-[![Docs](https://img.shields.io/badge/docs-unionai--oss.github.io-7C3AED?logo=readthedocs&logoColor=white)](https://unionai-oss.github.io/harness-lock/)
+[![CI](https://img.shields.io/github/actions/workflow/status/unionai-oss/hlock/ci.yml?branch=main&label=ci&logo=github)](https://github.com/unionai-oss/hlock/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-unionai--oss.github.io-7C3AED?logo=readthedocs&logoColor=white)](https://unionai-oss.github.io/hlock/)
 [![Python](https://img.shields.io/pypi/pyversions/harness-lock?logo=python&logoColor=white)](https://pypi.org/project/hlock/)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/unionai-oss/harness-lock/blob/main/LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/unionai-oss/hlock/blob/main/LICENSE)
 
-[**Documentation**](https://unionai-oss.github.io/harness-lock/) ·
-[Quickstart](https://unionai-oss.github.io/harness-lock/getting-started/quickstart/) ·
-[CLI reference](https://unionai-oss.github.io/harness-lock/reference/cli/) ·
-[Design spec](https://github.com/unionai-oss/harness-lock/blob/main/SPEC.md)
+[**Documentation**](https://unionai-oss.github.io/hlock/) ·
+[Quickstart](https://unionai-oss.github.io/hlock/getting-started/quickstart/) ·
+[CLI reference](https://unionai-oss.github.io/hlock/reference/cli/) ·
+[Design spec](https://github.com/unionai-oss/hlock/blob/main/SPEC.md)
 
 </div>
 
@@ -62,7 +64,7 @@ hlock run "clean ./data/orders.csv"     # run the locked agent
 ```
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/unionai-oss/harness-lock/main/docs/assets/quickstart.svg" alt="An hlock session: init, resolve, check, and run" width="640">
+  <img src="https://raw.githubusercontent.com/unionai-oss/hlock/main/docs/assets/quickstart.svg" alt="An hlock session: init, resolve, check, and run" width="640">
 </p>
 
 From there: `hlock show` prints the locked stack and its evidence, `hlock tree` prints the
@@ -157,12 +159,12 @@ flowchart TB
 
 | Path | What lives there |
 |---|---|
-| [`crates/harness-lock-core`](https://github.com/unionai-oss/harness-lock/tree/main/crates/harness-lock-core) | The core library (pure Rust): manifests, lockfiles, search planning, trial bookkeeping, evidence, lock construction. It orchestrates and aggregates, and never does heavy compute itself. |
-| [`crates/harness-lock-py`](https://github.com/unionai-oss/harness-lock/tree/main/crates/harness-lock-py) | PyO3 bindings, compiled into `harness_lock._harness_lock` and shipped only inside the wheel. |
-| [`crates/harness-lock`](https://github.com/unionai-oss/harness-lock/tree/main/crates/harness-lock), [`crates/hlock`](https://github.com/unionai-oss/harness-lock/tree/main/crates/hlock) | Thin crates that re-export the core under both names. |
-| [`harness_lock/`](https://github.com/unionai-oss/harness-lock/tree/main/harness_lock) | The Python package: the `hlock` CLI and the heavy-work worker ([`tasks/worker.py`](https://github.com/unionai-oss/harness-lock/blob/main/harness_lock/tasks/worker.py)). |
-| [`packaging/hlock`](https://github.com/unionai-oss/harness-lock/tree/main/packaging/hlock) | The `hlock` PyPI alias, which pins the matching `harness-lock` release. |
-| [`docs/`](https://github.com/unionai-oss/harness-lock/tree/main/docs) | The documentation site ([Zensical](https://zensical.org)), published to GitHub Pages. |
+| [`crates/harness-lock-core`](https://github.com/unionai-oss/hlock/tree/main/crates/harness-lock-core) | The core library (pure Rust): manifests, lockfiles, search planning, trial bookkeeping, evidence, lock construction. It orchestrates and aggregates, and never does heavy compute itself. |
+| [`crates/harness-lock-py`](https://github.com/unionai-oss/hlock/tree/main/crates/harness-lock-py) | PyO3 bindings, compiled into `harness_lock._harness_lock` and shipped only inside the wheel. |
+| [`crates/harness-lock`](https://github.com/unionai-oss/hlock/tree/main/crates/harness-lock), [`crates/hlock`](https://github.com/unionai-oss/hlock/tree/main/crates/hlock) | Thin crates that re-export the core under both names. |
+| [`harness_lock/`](https://github.com/unionai-oss/hlock/tree/main/harness_lock) | The Python package: the `hlock` CLI and the heavy-work worker ([`tasks/worker.py`](https://github.com/unionai-oss/hlock/blob/main/harness_lock/tasks/worker.py)). |
+| [`packaging/hlock`](https://github.com/unionai-oss/hlock/tree/main/packaging/hlock) | The `hlock` PyPI alias, which pins the matching `harness-lock` release. |
+| [`docs/`](https://github.com/unionai-oss/hlock/tree/main/docs) | The documentation site ([Zensical](https://zensical.org)), published to GitHub Pages. |
 
 ## Backends
 
@@ -178,7 +180,7 @@ hlock optimize --backend devbox --depth probe --max-trials 10
 hlock optimize --backend cluster --depth ft --data user:./runs   # LoRA on a GPU worker
 ```
 
-See [Backends](https://unionai-oss.github.io/harness-lock/guides/backends/) for setup and
+See [Backends](https://unionai-oss.github.io/hlock/guides/backends/) for setup and
 the `HL_*` environment variables.
 
 ## Development
@@ -196,16 +198,16 @@ uv run --group docs zensical serve # docs at http://localhost:8000
 
 `uv run` rebuilds the extension automatically when Rust sources change.
 
-Releases are cut from tags. See [RELEASING.md](https://github.com/unionai-oss/harness-lock/blob/main/RELEASING.md).
+Releases are cut from tags. See [RELEASING.md](https://github.com/unionai-oss/hlock/blob/main/RELEASING.md).
 
 ## Status
 
 `hlock` is at **v0.1**. What works today: manifest and lockfile schema v1, a
 content-addressed store, task packs with graders, the reference provider and harness,
 grid search with Pareto selection, `upgrade` (plan/apply/rollback), and `optimize` across
-the `local`, `devbox`, and `cluster` backends. [SPEC.md](https://github.com/unionai-oss/harness-lock/blob/main/SPEC.md) describes the full design,
+the `local`, `devbox`, and `cluster` backends. [SPEC.md](https://github.com/unionai-oss/hlock/blob/main/SPEC.md) describes the full design,
 much of which is still on the roadmap.
 
 ## License
 
-[Apache-2.0](https://github.com/unionai-oss/harness-lock/blob/main/LICENSE)
+[Apache-2.0](https://github.com/unionai-oss/hlock/blob/main/LICENSE)

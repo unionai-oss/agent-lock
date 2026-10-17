@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="hlock">
+  <!--
+    hlock, animated: the shackle opens, the sliders search while the body shifts
+    shape and color, then everything settles into the tuned state and the shackle
+    snaps shut. One 6s loop. With prefers-reduced-motion it shows the locked state.
+  -->
+  <style>
+    .shackle, .body, .knob { transform-box: fill-box; animation: 6s cubic-bezier(.45, 0, .25, 1) infinite; }
+    .shackle { transform-origin: 50% 100%; animation-name: shackle; }
+    .body    { transform-origin: 50% 50%;  animation-name: body; }
+    .k1 { animation-name: k1; }
+    .k2 { animation-name: k2; }
+    .k3 { animation-name: k3; }
+
+    /* open, hold while tuning, snap shut with a small bounce, stay locked */
+    @keyframes shackle {
+      0%, 6%    { transform: translateY(0); }
+      12%, 68%  { transform: translateY(-5px); }
+      74%       { transform: translateY(1.5px); }
+      78%, 100% { transform: translateY(0); }
+    }
+    /* adapt: squash, stretch, and shift hue while searching; settle, then a lock "click" */
+    @keyframes body {
+      0%, 10%   { transform: scale(1, 1);       filter: hue-rotate(0deg); }
+      24%       { transform: scale(1.05, .94);   filter: hue-rotate(90deg); }
+      38%       { transform: scale(.95, 1.05);    filter: hue-rotate(180deg); }
+      52%       { transform: scale(1.03, .96);  filter: hue-rotate(270deg); }
+      66%       { transform: scale(1, 1);       filter: hue-rotate(360deg); }
+      74%       { transform: scale(1, 1);       filter: hue-rotate(360deg); }
+      78%       { transform: scale(1.03, .97);  filter: hue-rotate(360deg); }
+      82%, 100% { transform: scale(1, 1);       filter: hue-rotate(360deg); }
+    }
+    /* each knob explores its track, then lands on its tuned value (the static logo) */
+    @keyframes k1 {
+      0%, 10% { transform: translateX(0); }
+      24% { transform: translateX(-16px); }
+      38% { transform: translateX(6px); }
+      52% { transform: translateX(-9px); }
+      66%, 100% { transform: translateX(0); }
+    }
+    @keyframes k2 {
+      0%, 10% { transform: translateX(0); }
+      24% { transform: translateX(20px); }
+      38% { transform: translateX(4px); }
+      52% { transform: translateX(14px); }
+      66%, 100% { transform: translateX(0); }
+    }
+    @keyframes k3 {
+      0%, 10% { transform: translateX(0); }
+      24% { transform: translateX(-6px); }
+      38% { transform: translateX(12px); }
+      52% { transform: translateX(-10px); }
+      66%, 100% { transform: translateX(0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .shackle, .body, .knob { animation: none; }
+    }
+  </style>
+  <defs>
+    <linearGradient id="hlock-body" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#a78bfa"/>
+      <stop offset="1" stop-color="#f472b6"/>
+    </linearGradient>
+  </defs>
+  <path class="shackle" d="M20 31V21a12 12 0 0 1 24 0v10" fill="none" stroke="#c4b5fd" stroke-width="6" stroke-linecap="round"/>
+  <g class="body">
+    <rect x="9" y="28" width="46" height="31" rx="9" fill="url(#hlock-body)"/>
+    <g stroke="#ffffff" stroke-opacity=".45" stroke-width="3" stroke-linecap="round">
+      <line x1="17" y1="36.5" x2="47" y2="36.5"/>
+      <line x1="17" y1="43.5" x2="47" y2="43.5"/>
+      <line x1="17" y1="50.5" x2="47" y2="50.5"/>
+    </g>
+    <g fill="#ffffff">
+      <circle class="knob k1" cx="39" cy="36.5" r="3.8"/>
+      <circle class="knob k2" cx="23" cy="43.5" r="3.8"/>
+      <circle class="knob k3" cx="33" cy="50.5" r="3.8"/>
+    </g>
+  </g>
+</svg>

@@ -1,19 +1,23 @@
 ---
 title: hlock
-description: Lock your agent into place. Tune your agent stack against your own tasks, then pin the winner in a harness.lock.
-hide:
-  - navigation
-  - toc
+description: Make your agent harness setup pinnable and portable. Tune your agent stack against your own tasks, then pin the winner in a harness.lock.
 ---
 
-# :lucide-lock: hlock
+<p align="center">
+  <img src="assets/logo-animated.svg" alt="hlock logo" width="120">
+</p>
 
-**Lock your agent into place.** `hlock` tunes your agent stack against your own tasks,
-then pins the winner in a `harness.lock`: a pinned, hashed, version-controlled
-description of the agent that works for your domain, plus the evidence for choosing it.
+# hlock { style="text-align: center" }
+
+<p align="center"><strong>Make your agent harness setup pinnable and portable.</strong></p>
+
+`hlock` tunes your agent stack against your own tasks, then pins the winner in a
+`harness.lock`: a pinned, hashed, version-controlled description of the agent that
+works for your domain, plus the evidence for choosing it. Commit the lock, and the
+same setup comes back on any machine, in CI, or on a cluster.
 
 [Get started](getting-started/quickstart.md){ .md-button .md-button--primary }
-[View on GitHub](https://github.com/unionai-oss/harness-lock){ .md-button }
+[View on GitHub](https://github.com/unionai-oss/hlock){ .md-button }
 
 ```bash
 pip install hlock

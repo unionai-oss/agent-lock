@@ -7,7 +7,7 @@ authors.workspace = true
 repository.workspace = true
 description = "Core library for harness-lock: manifest, lockfile, store, tuning."
 readme = "../../README.md"
-homepage = "https://github.com/unionai-oss/harness-lock"
+homepage = "https://github.com/unionai-oss/hlock"
 keywords = ["agents", "llm", "lockfile", "evaluation", "flyte"]
 categories = ["development-tools", "command-line-utilities"]
 

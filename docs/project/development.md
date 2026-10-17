@@ -11,8 +11,8 @@ one.
 ## Set up
 
 ```bash
-git clone https://github.com/unionai-oss/harness-lock
-cd harness-lock
+git clone https://github.com/unionai-oss/hlock
+cd hlock
 uv sync
 ```
 
@@ -76,5 +76,5 @@ uv run python scripts/cli_screenshot.py         # writes docs/assets/quickstart.
 ## Where things live
 
 See [Architecture](../concepts/architecture.md#repository-layout) for the repository
-layout, and [SPEC.md](https://github.com/unionai-oss/harness-lock/blob/main/SPEC.md) for
+layout, and [SPEC.md](https://github.com/unionai-oss/hlock/blob/main/SPEC.md) for
 the full design.

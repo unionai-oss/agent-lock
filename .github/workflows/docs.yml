@@ -1,7 +1,7 @@
 name: docs
 
 # Builds the Zensical site (zensical.toml + docs/). Pushes to main deploy it to
-# GitHub Pages at https://unionai-oss.github.io/harness-lock/. Pull requests only
+# GitHub Pages at https://unionai-oss.github.io/hlock/. Pull requests only
 # build it, so a broken page fails review instead of the deploy.
 #
 # One-time setup: Settings → Pages → Build and deployment → Source: "GitHub Actions".

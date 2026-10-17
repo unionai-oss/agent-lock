@@ -23,4 +23,4 @@ Both publish workflows refuse to run if the tag doesn't match the version in
 `Cargo.toml`.
 
 The full checklist, one-time registry setup, and recovery steps are in
-[RELEASING.md](https://github.com/unionai-oss/harness-lock/blob/main/RELEASING.md).
+[RELEASING.md](https://github.com/unionai-oss/hlock/blob/main/RELEASING.md).

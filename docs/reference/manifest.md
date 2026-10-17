@@ -104,7 +104,7 @@ tuner selects from the whole Pareto front instead of failing; see
 
 `[tools]`, `[skills]`, `[instructions]`, `[context]`, and `[enforce]` are parsed and
 included in the manifest hash. They're placeholders for the peripherals described in
-the [design spec](https://github.com/unionai-oss/harness-lock/blob/main/SPEC.md), and
+the [design spec](https://github.com/unionai-oss/hlock/blob/main/SPEC.md), and
 the v0.1 tuner doesn't search over them yet.
 
 ## The manifest hash

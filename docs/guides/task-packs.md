@@ -73,7 +73,7 @@ tags = ["writing"]
 In v0.1, a task succeeds when every file in `expected.artifacts` exists in the task's
 workspace after the run. This is the `artifact:` grader, and it's the default when
 `graders` is empty. Richer graders (tests, rubric judges) are on the
-[roadmap](https://github.com/unionai-oss/harness-lock/blob/main/SPEC.md).
+[roadmap](https://github.com/unionai-oss/hlock/blob/main/SPEC.md).
 
 ## Using a pack
 

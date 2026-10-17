@@ -29,8 +29,8 @@ dependencies = ["harness-lock==0.1.2"]
 flyte = ["harness-lock[flyte]==0.1.2"]
 
 [project.urls]
-Homepage = "https://github.com/unionai-oss/harness-lock"
-Source = "https://github.com/unionai-oss/harness-lock"
+Homepage = "https://github.com/unionai-oss/hlock"
+Source = "https://github.com/unionai-oss/hlock"
 
 [tool.hatch.build.targets.wheel]
 packages = ["hlock"]
