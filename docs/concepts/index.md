@@ -72,7 +72,7 @@ a PR tells you what changed in the agent and what evidence supports the change.
 | Command | What it does |
 |---|---|
 | [`hlock check`](../guides/ci.md) | Fails if `harness.toml` changed after the lock was written. Put it in CI. |
-| `hlock run` | Runs the pinned stack on a prompt. |
+| [`hlock run`](../reference/cli.md#run) | Runs the pinned stack on a prompt. |
 | [`hlock upgrade`](../guides/upgrade.md) | Finds newer models for locked roles, re-measures, and applies only on request, keeping the old lock for rollback. |
 | [`hlock optimize`](../guides/optimize.md) | Goes beyond choosing: tunes prompts and hyperparameters, and can fine-tune small models, writing `harness.opt.lock`. |
 
