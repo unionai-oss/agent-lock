@@ -30,13 +30,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v6
+      # Only the locked docs group: Zensical doesn't need the Rust extension built.
       - name: Install Zensical
-        run: pip install -r docs/requirements.txt
+        run: uv sync --locked --only-group docs --python 3.12
       - name: Build
-        run: zensical build --clean
+        run: uv run --no-sync zensical build --clean
       - if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:

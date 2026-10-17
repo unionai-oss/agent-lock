@@ -1,7 +1,6 @@
 # Documentation site for hlock, built with Zensical (https://zensical.org).
-#   pip install -r docs/requirements.txt
-#   zensical serve            # http://localhost:8000, live reload
-#   zensical build --clean    # -> site/
+#   uv run --group docs zensical serve           # http://localhost:8000, live reload
+#   uv run --group docs zensical build --clean   # -> site/
 # Published to GitHub Pages by .github/workflows/docs.yml.
 
 [project]

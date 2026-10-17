@@ -183,17 +183,18 @@ the `HL_*` environment variables.
 
 ## Development
 
+Development uses [uv](https://docs.astral.sh/uv/) and a Rust toolchain.
+
 ```bash
-python3.13 -m venv .venv && source .venv/bin/activate
-pip install maturin click pytest ruff
-maturin develop -m crates/harness-lock-py/Cargo.toml   # build + install the extension
-
+uv sync                            # create .venv, build the Rust extension, install dev tools
+uv run pytest                      # Python bindings, CLI, worker
+uv run ruff check harness_lock tests packaging/hlock
 cargo test -p harness-lock-core    # Rust core + integration tests
-python -m pytest tests             # Python bindings + worker
-ruff check harness_lock tests packaging/hlock
 
-pip install -r docs/requirements.txt && zensical serve   # docs at http://localhost:8000
+uv run --group docs zensical serve # docs at http://localhost:8000
 ```
+
+`uv run` rebuilds the extension automatically when Rust sources change.
 
 Releases are cut from tags. See [RELEASING.md](https://github.com/unionai-oss/harness-lock/blob/main/RELEASING.md).
 

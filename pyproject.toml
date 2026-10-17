@@ -31,7 +31,19 @@ dev = [
 ]
 flyte = [
     # flyteplugins-rs registers Rust-backed tasks with a Flyte/Union backend.
-    "flyteplugins-rs",
+    "flyteplugins-rs; python_version >= '3.10'",
+]
+
+[dependency-groups]
+# `uv sync` installs `dev` by default; add `--group docs` for the docs toolchain.
+dev = [
+    "maturin>=1.5,<2.0",
+    "pytest>=7.0",
+    "ruff",
+]
+docs = [
+    # Zensical is pre-1.0 (pin it, bump deliberately) and needs Python 3.11+.
+    "zensical==0.0.71; python_version >= '3.11'",
 ]
 
 [project.scripts]
@@ -42,6 +54,16 @@ harness-lock = "harness_lock.cli:main"
 manifest-path = "crates/harness-lock-py/Cargo.toml"
 module-name = "harness_lock._harness_lock"
 python-source = "."
+
+[tool.uv]
+# Rebuild the Rust extension on `uv sync` / `uv run` whenever Rust sources change.
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "Cargo.toml" },
+    { file = "Cargo.lock" },
+    { file = "crates/**/*.rs" },
+    { file = "crates/**/Cargo.toml" },
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

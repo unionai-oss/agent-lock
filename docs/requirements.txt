@@ -1,2 +1,0 @@
-# Docs toolchain. Zensical is pre-1.0, so pin it and bump deliberately.
-zensical==0.0.71
