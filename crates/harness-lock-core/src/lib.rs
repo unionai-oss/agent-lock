@@ -10,14 +10,20 @@
 //! model so the user surface stays stable across the language boundary.
 
 pub mod adapters;
+pub mod capture;
+pub mod contract;
+pub mod launch;
+pub mod localize;
 pub mod error;
 pub mod hash;
 pub mod lockfile;
 pub mod manifest;
 pub mod ops;
+pub mod profiles;
 pub mod providers;
 pub mod search;
 pub mod store;
+pub mod sync;
 pub mod tasks;
 pub mod tuner;
 pub mod worker;
@@ -30,6 +36,7 @@ pub use error::{Error, Result};
 pub use hash::{content_hash, sha256_hex, sha256_text};
 pub use lockfile::Lockfile;
 pub use manifest::Manifest;
+pub use profiles::Registry;
 pub use store::Store;
 pub use tuner::Tuner;
 pub use worker::Backend;

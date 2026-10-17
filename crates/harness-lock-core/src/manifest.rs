@@ -125,6 +125,12 @@ pub struct Manifest {
     pub enforce: BTreeMap<String, serde_json::Value>,
     #[serde(default)]
     pub backend: BTreeMap<String, serde_json::Value>,
+    /// The harness this lock is for (`[target] harness = "claude-code"`).
+    #[serde(default)]
+    pub target: BTreeMap<String, serde_json::Value>,
+    /// Project-defined harnesses (`[harnesses.<id>]`): framework agents and custom scripts.
+    #[serde(default)]
+    pub harnesses: BTreeMap<String, serde_json::Value>,
     #[serde(skip)]
     pub source_path: Option<PathBuf>,
 }
@@ -177,6 +183,15 @@ impl Manifest {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
             .unwrap_or_else(|| "local".to_string())
+    }
+
+    /// `[target] harness`, the harness the lock is meant to run in.
+    pub fn target_harness(&self) -> Option<String> {
+        self.target
+            .get("harness")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
     }
 
     pub fn search_frac(&self) -> f64 {

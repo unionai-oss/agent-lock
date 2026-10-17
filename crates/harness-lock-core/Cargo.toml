@@ -26,6 +26,7 @@ thiserror = { workspace = true }
 # The flyte-sdk-rs backend (optional — links libpython via flyte_core/pyo3 and is
 # only compiled when the `flyte` feature is enabled).
 flyte = { version = "0.1", optional = true }
+serde_norway = "0.9.42"
 
 [features]
 default = []

@@ -1,0 +1,13 @@
+# Runtime profile: Docker Model Runner.
+id = "docker-model-runner"
+name = "Docker Model Runner"
+aliases = ["docker-model", "dmr"]
+homepage = "https://docs.docker.com/ai/model-runner/"
+binaries = ["docker"]
+ports = [12434]
+provider-names = ["docker-model-runner", "docker"]
+pull = "docker model pull {model}"
+
+[[install]]
+method = "manual"
+command = "Install Docker Desktop and enable Model Runner (Settings > AI)"

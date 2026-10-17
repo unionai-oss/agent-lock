@@ -1,0 +1,46 @@
+# Harness profile: Gemini CLI.
+id = "gemini-cli"
+name = "Gemini CLI"
+kind = "cli"
+aliases = ["gemini"]
+vendor = "Google"
+homepage = "https://github.com/google-gemini/gemini-cli"
+support = "basic"
+open-source = true
+local-models = false
+binaries = ["gemini"]
+version = { args = ["--version"] }
+active-env = ["GEMINI_CLI"]
+config-root = { default = "~/.gemini" }
+instructions = ["GEMINI.md", "AGENTS.md", "{root}/GEMINI.md"]
+
+[[install]]
+method = "npm"
+package = "@google/gemini-cli"
+[[install]]
+method = "brew"
+package = "gemini-cli"
+
+[files.settings]
+path = "{root}/settings.json"
+format = "json"
+restore = "whole"
+[files.project-settings]
+path = ".gemini/settings.json"
+format = "json"
+restore = "record"
+
+[model]
+default = ["env:GEMINI_MODEL", "settings#/model/name"]
+default-provider = "google"
+
+[mcp]
+sources = ["settings#/mcpServers", "project-settings#/mcpServers"]
+write = "settings#/mcpServers"
+
+[skills]
+dirs = ["{root}/skills", ".gemini/skills", "~/.agents/skills", ".agents/skills"]
+write = "{root}/skills"
+
+[launch]
+model-flag = "--model"

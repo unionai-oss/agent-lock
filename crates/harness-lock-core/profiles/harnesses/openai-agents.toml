@@ -1,0 +1,8 @@
+# Framework profile: OpenAI Agents SDK.
+id = "openai-agents"
+name = "OpenAI Agents SDK"
+kind = "framework"
+aliases = ["openai-agents-sdk", "agents-sdk"]
+vendor = "OpenAI"
+homepage = "https://openai.github.io/openai-agents-python/"
+packages = ["pypi:openai-agents", "pypi:openai"]

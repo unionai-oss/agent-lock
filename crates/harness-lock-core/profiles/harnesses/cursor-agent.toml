@@ -1,0 +1,50 @@
+# Harness profile: Cursor Agent CLI.
+id = "cursor-agent"
+name = "Cursor Agent"
+kind = "cli"
+aliases = ["cursor", "cursor-cli"]
+vendor = "Anysphere"
+homepage = "https://cursor.com/cli"
+support = "full"
+open-source = false
+local-models = false
+binaries = ["cursor-agent", "agent"]
+version = { args = ["--version"] }
+active-env = ["CURSOR_AGENT", "CURSOR_AGENT_CHAT_ID"]
+config-root = { env = "CURSOR_CONFIG_DIR", default = "~/.cursor" }
+instructions = ["AGENTS.md", "CLAUDE.md", ".cursorrules"]
+
+[[install]]
+method = "script"
+command = "curl https://cursor.com/install -fsS | bash"
+path-hints = ["/.local/share/cursor-agent/"]
+
+[files.cli-config]
+path = "{root}/cli-config.json"
+format = "json"
+restore = "pointers"
+pointers = ["/model", "/permissions", "/maxMode"]
+[files.mcp]
+path = "{root}/mcp.json"
+format = "jsonc"
+restore = "whole"
+[files.project-mcp]
+path = ".cursor/mcp.json"
+format = "jsonc"
+restore = "record"
+
+[model]
+default = ["cli-config#/model/modelId"]
+default-provider = "cursor"
+
+[mcp]
+sources = ["mcp#/mcpServers", "project-mcp#/mcpServers"]
+write = "mcp#/mcpServers"
+
+[skills]
+dirs = ["{root}/skills", ".cursor/skills", "~/.agents/skills", ".agents/skills"]
+write = "{root}/skills"
+builtin-dirs = ["{root}/skills-cursor"]
+
+[launch]
+model-flag = "--model"

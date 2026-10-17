@@ -1,0 +1,46 @@
+# Harness profile: GitHub Copilot CLI.
+id = "copilot-cli"
+name = "GitHub Copilot CLI"
+kind = "cli"
+aliases = ["copilot", "github-copilot"]
+vendor = "GitHub"
+homepage = "https://github.com/github/copilot-cli"
+support = "basic"
+open-source = false
+local-models = false
+binaries = ["copilot"]
+version = { args = ["--version"] }
+config-root = { env = "COPILOT_HOME", default = "~/.copilot" }
+instructions = ["AGENTS.md", ".github/copilot-instructions.md"]
+
+[[install]]
+method = "npm"
+package = "@github/copilot"
+[[install]]
+method = "brew"
+package = "copilot-cli"
+
+[files.config]
+path = "{root}/config.json"
+format = "json"
+restore = "pointers"
+pointers = ["/model"]
+[files.mcp]
+path = "{root}/mcp-config.json"
+format = "json"
+restore = "whole"
+
+[model]
+default = ["config#/model"]
+default-provider = "github-copilot"
+
+[mcp]
+sources = ["mcp#/mcpServers"]
+write = "mcp#/mcpServers"
+
+[skills]
+dirs = ["{root}/skills", ".github/skills", "~/.agents/skills", ".agents/skills"]
+write = "{root}/skills"
+
+[launch]
+model-flag = "--model"

@@ -1,0 +1,7 @@
+# Framework profile: smolagents (Hugging Face).
+id = "smolagents"
+name = "smolagents"
+kind = "framework"
+vendor = "Hugging Face"
+homepage = "https://huggingface.co/docs/smolagents"
+packages = ["pypi:smolagents"]

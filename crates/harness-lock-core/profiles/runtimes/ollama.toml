@@ -1,0 +1,71 @@
+# Runtime profile: Ollama. See docs/guides/harness-profiles.md for the format.
+id = "ollama"
+name = "Ollama"
+homepage = "https://ollama.com"
+binaries = ["ollama"]
+version = { args = ["--version"] }
+ports = [11434]
+provider-names = ["ollama", "ollama-local"]
+pull = "ollama pull {model}"
+serve = "ollama serve"
+
+[models]
+layout = "ollama"
+dirs = ["env:OLLAMA_MODELS", "~/.ollama/models", "/usr/share/ollama/.ollama/models"]
+
+[[install]]
+method = "brew"
+package = "ollama"
+[[install]]
+method = "app"
+command = "Download the Ollama app from https://ollama.com/download"
+path-hints = ["/Ollama.app/"]
+[[install]]
+method = "script"
+command = "curl -fsSL https://ollama.com/install.sh | sh"
+
+# Models `hlock localize` may pick. tier: 3 strong agentic coder, 2 capable, 1 small/fast.
+# min-memory-gb is what the weights plus a working context need. Extend with your own.
+[[catalog]]
+id = "gpt-oss:120b"
+params-b = 117
+min-memory-gb = 72
+tier = 3
+tools = true
+[[catalog]]
+id = "qwen3-coder:30b"
+params-b = 30
+min-memory-gb = 24
+tier = 3
+tools = true
+[[catalog]]
+id = "gpt-oss:20b"
+params-b = 21
+min-memory-gb = 16
+tier = 2
+tools = true
+[[catalog]]
+id = "devstral:24b"
+params-b = 24
+min-memory-gb = 20
+tier = 2
+tools = true
+[[catalog]]
+id = "qwen3:8b"
+params-b = 8
+min-memory-gb = 8
+tier = 1
+tools = true
+[[catalog]]
+id = "qwen3:4b"
+params-b = 4
+min-memory-gb = 5
+tier = 1
+tools = true
+[[catalog]]
+id = "qwen3:1.7b"
+params-b = 1.7
+min-memory-gb = 3
+tier = 1
+tools = true
+roles = ["small", "decision"]

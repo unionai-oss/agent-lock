@@ -1,0 +1,7 @@
+# Framework profile: LangGraph.
+id = "langgraph"
+name = "LangGraph"
+kind = "framework"
+vendor = "LangChain"
+homepage = "https://langchain-ai.github.io/langgraph/"
+packages = ["pypi:langgraph", "pypi:langchain-core"]

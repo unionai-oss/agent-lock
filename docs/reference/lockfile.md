@@ -76,13 +76,35 @@ the complete file.
 | `[stack]` | Stack name, and the `select` rule that chose it |
 | `[[llm]]` | One entry per role: `provider`, `model`, the candidate string it came from, a `fingerprint`, and `params` |
 | `[decision]` | Decision model `kind`, its `decisions`, and `thresholds` |
-| `[harness]` | Harness `name` and `pattern` |
+| `[harness]` | Harness `name` and `pattern`. For a harness with a profile, also the installed `version`, its install `source` (e.g. `brew-cask:claude-code@2.1.285`), and the `adapter` that ran the trials. |
 | `[policy]` | `retries`, `max-steps`, `human-approval`, `risky-actions`, `tool-allowlist`, `sandbox` |
 | `[context]` | Context `isolation` and `compaction` settings |
 | `tool`, `skill`, `instructions` | Locked peripherals (reserved in v0.1) |
 | `[evidence]` | The task pack and split measured, the trial count, and success-rate, cost, and latency statistics |
 | `[verify]` | Runtime verification thresholds: `canary-tasks`, `min-success-rate`, `fingerprint-tolerance` |
 | `[provenance]` | The backend that produced the lock, and the search settings |
+
+## Pinned locks
+
+[`hlock pin`](../guides/pin.md) writes a lock with `kind = "pin"`, no `manifest-hash`, and
+no evidence. Its `[[llm]]` entries may carry `endpoint` and `runtime`; `[[tool]]` entries for
+MCP servers carry `transport`, `command`, `args`, `url`, `env`, `headers`, `scope` and
+`enabled`; `[[skill]]` entries carry `scope`, `path` and `vendored`. It adds:
+
+| Section | Contents |
+|---|---|
+| `[[native]]` | Plugins, packages, extensions and marketplaces: `kind` (e.g. `claude-code.plugin`, `pi.package`), `name`, `version`, `source`, `revision`, `integrity`, `enabled`, `config` |
+| `[[runtime]]` | Inference runtimes: `name`, `location` (`local` or `network`), `version`, `source`, `endpoint`, and `[[runtime.model]]` entries with `id`, `source`, `revision`, `digest`, `size-bytes`, `present` |
+| `[[config]]` | Harness config files: `id`, `path`, `format`, `restore` (`whole`, `pointers`, `record`), `pointers`, `digest`, `vendored` |
+| `[[secret]]` | Placeholders that replaced secrets: `name` (the environment variable that supplies it) and `used-by` |
+
+## Localized locks
+
+[`hlock localize`](../guides/localize.md) writes a lock with `kind = "localized"`,
+`base-lock` naming the source lock, local `[[llm]]`/`[[runtime]]` entries, `[[config]]`
+entries that point the harness at the local endpoint, and a `[localize]` table recording what
+was replaced, the candidates considered, the memory budget, whether it was evaluated, and the
+source lock's evidence as a baseline.
 
 ## `harness.opt.lock`
 

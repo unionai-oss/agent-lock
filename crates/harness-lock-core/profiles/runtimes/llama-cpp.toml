@@ -1,0 +1,19 @@
+# Runtime profile: llama.cpp (llama-server).
+id = "llama-cpp"
+name = "llama.cpp"
+aliases = ["llamacpp", "llama.cpp", "llama-server"]
+homepage = "https://github.com/ggml-org/llama.cpp"
+binaries = ["llama-server", "llama-cli"]
+version = { args = ["--version"] }
+ports = [8080]
+provider-names = ["llama-cpp", "llamacpp", "llama.cpp", "llama-local", "llama-server"]
+pull = "hf download {repo} {file} --revision {revision}"
+serve = "llama-server -hf {model}"
+
+[models]
+layout = "hf-cache"
+dirs = ["env:LLAMA_CACHE", "~/Library/Caches/llama.cpp", "~/.cache/llama.cpp"]
+
+[[install]]
+method = "brew"
+package = "llama.cpp"

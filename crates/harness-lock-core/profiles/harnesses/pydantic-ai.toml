@@ -1,0 +1,12 @@
+# Framework profile: Pydantic AI. Use it from a project harness:
+#   [harnesses.my-agent]
+#   framework = "pydantic-ai"
+#   entrypoint = "my_agent:run"
+id = "pydantic-ai"
+name = "Pydantic AI"
+kind = "framework"
+aliases = ["pydantic_ai", "pydanticai"]
+vendor = "Pydantic"
+homepage = "https://ai.pydantic.dev"
+packages = ["pypi:pydantic-ai-slim", "pypi:pydantic-ai"]
+instructions = ["AGENTS.md"]

@@ -71,6 +71,26 @@ From there: `hlock show` prints the locked stack and its evidence, `hlock tree` 
 component graph, `hlock upgrade` plans model upgrades, and `hlock optimize` tunes prompts,
 hyperparameters, and small models into a `harness.opt.lock`.
 
+### Already have a harness set up?
+
+Pin it. `hlock pin` captures your Claude Code, Codex, Pi, OpenCode, Hermes or Cursor setup
+into `harness.lock`: the harness version, the models and local runtimes it uses, MCP
+servers, skills, plugins, and config, with secrets replaced by placeholders.
+
+```bash
+hlock harness list      # the harnesses on this machine, and the one you're running inside
+hlock pin               # lock your current setup into harness.lock
+hlock check             # fail if your setup drifted from the pin
+hlock sync              # on another machine: rehydrate it (also --prefix DIR, --docker)
+hlock launch            # start a session that matches the lock (or: hlock launch opencode)
+hlock localize          # an all-local equivalent: local harness + Ollama/LM Studio models
+```
+
+See [Harnesses](https://unionai-oss.github.io/hlock/guides/harnesses/) and
+[Pinning your setup](https://unionai-oss.github.io/hlock/guides/pin/),
+[Rehydrating with sync](https://unionai-oss.github.io/hlock/guides/sync/), and
+[Launching a locked harness](https://unionai-oss.github.io/hlock/guides/launch/).
+
 <details>
 <summary><b>Python API</b></summary>
 

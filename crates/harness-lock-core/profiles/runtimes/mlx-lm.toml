@@ -1,0 +1,21 @@
+# Runtime profile: MLX LM (Apple silicon).
+id = "mlx-lm"
+name = "MLX LM"
+aliases = ["mlx"]
+homepage = "https://github.com/ml-explore/mlx-lm"
+binaries = ["mlx_lm.server"]
+ports = [8080]
+provider-names = ["mlx", "mlx-lm"]
+pull = "hf download {model} --revision {revision}"
+serve = "mlx_lm.server --model {model}"
+
+[models]
+layout = "hf-cache"
+dirs = ["env:HF_HUB_CACHE", "~/.cache/huggingface/hub"]
+
+[[install]]
+method = "uv-tool"
+package = "mlx-lm"
+[[install]]
+method = "pip"
+package = "mlx-lm"
