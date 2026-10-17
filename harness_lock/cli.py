@@ -27,12 +27,12 @@ def main() -> None:
 @click.option("--pack", default="./tasks", show_default=True)
 @click.option("--force", is_flag=True)
 def init(name: str, pack: str, force: bool) -> None:
-    """Write a starter harnesslock.toml manifest."""
+    """Write a starter harness.toml manifest."""
     from pathlib import Path
 
-    p = Path("harnesslock.toml")
+    p = Path("harness.toml")
     if p.exists() and not force:
-        click.echo("harnesslock.toml already exists (use --force to overwrite)")
+        click.echo("harness.toml already exists (use --force to overwrite)")
         sys.exit(1)
     p.write_text(_default_manifest(name, pack))
     click.echo(f"wrote {p}")
@@ -43,7 +43,7 @@ def init(name: str, pack: str, force: bool) -> None:
 @click.option("--workdir", default=None, help="Where to put .harnesslock artifacts")
 def resolve(backend: str | None, workdir: str | None) -> None:
     """Tune the search space and write harness.lock."""
-    lf = _resolve("harnesslock.toml", backend=backend, workdir=workdir or ".harnesslock")
+    lf = _resolve("harness.toml", backend=backend, workdir=workdir or ".harnesslock")
     click.echo("wrote harness.lock")
     click.echo(lf.summary())
 
@@ -58,7 +58,7 @@ def show() -> None:
 @main.command()
 def check() -> None:
     """Static verification (CI-friendly exit code)."""
-    m = Manifest.load("harnesslock.toml")
+    m = Manifest.load("harness.toml")
     lf = Lockfile.load("harness.lock")
     if lf.manifest_hash is None:
         click.echo("FAIL: lock has no manifest-hash")
@@ -156,10 +156,10 @@ def backend() -> None:
 def backend_status() -> None:
     """Report the active backend."""
     try:
-        m = Manifest.load("harnesslock.toml")
+        m = Manifest.load("harness.toml")
         click.echo(f"configured backend (manifest): {m.backend}")
     except Exception:  # noqa: BLE001 - manifest may be absent
-        click.echo("configured backend (manifest): local (no harnesslock.toml)")
+        click.echo("configured backend (manifest): local (no harness.toml)")
 
 
 def _default_manifest(name: str, pack: str) -> str:

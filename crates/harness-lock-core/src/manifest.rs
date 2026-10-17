@@ -1,4 +1,4 @@
-//! The manifest: `harnesslock.toml`.
+//! The manifest: `harness.toml`.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -134,14 +134,14 @@ impl Manifest {
         let text = std::fs::read_to_string(path)
             .map_err(|e| Error::Manifest(format!("cannot read {}: {e}", path.display())))?;
         let mut m: Manifest = toml::from_str(&text)
-            .map_err(|e| Error::Manifest(format!("invalid harnesslock.toml: {e}")))?;
+            .map_err(|e| Error::Manifest(format!("invalid harness.toml: {e}")))?;
         m.source_path = Some(path.to_path_buf());
         Ok(m)
     }
 
     /// Parse from an in-memory TOML string.
     pub fn from_str(text: &str) -> Result<Manifest> {
-        toml::from_str(text).map_err(|e| Error::Manifest(format!("invalid harnesslock.toml: {e}")))
+        toml::from_str(text).map_err(|e| Error::Manifest(format!("invalid harness.toml: {e}")))
     }
 
     pub fn name(&self) -> String {

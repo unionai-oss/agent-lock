@@ -22,7 +22,7 @@ fn py_err(e: core::Error) -> PyErr {
 // --------------------------------------------------------------------------- //
 // Manifest
 // --------------------------------------------------------------------------- //
-/// A parsed `harnesslock.toml`.
+/// A parsed `harness.toml`.
 #[pyclass(module = "harness_lock", name = "Manifest")]
 #[derive(Clone)]
 pub struct PyManifest {
@@ -419,7 +419,7 @@ fn resolve_manifest(py: Python<'_>, manifest: Option<PyObject>, backend: Option<
                 ));
             }
         }
-        None => core::Manifest::load(Path::new("harnesslock.toml")).map_err(py_err)?,
+        None => core::Manifest::load(Path::new("harness.toml")).map_err(py_err)?,
     };
     if let Some(b) = backend {
         m.backend.insert("target".to_string(), serde_json::json!(b));

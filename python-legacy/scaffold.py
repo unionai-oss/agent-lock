@@ -1,4 +1,4 @@
-"""Scaffolding: render a starter ``harnesslock.toml`` (``hlock init``)."""
+"""Scaffolding: render a starter ``harness.toml`` (``hlock init``)."""
 
 from __future__ import annotations
 

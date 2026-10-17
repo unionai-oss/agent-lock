@@ -104,7 +104,7 @@ fn model_of(spec: &str) -> String {
     spec.rsplit_once(':').map(|(_, m)| m.to_string()).unwrap_or_else(|| spec.to_string())
 }
 
-/// `hlock upgrade`. `manifest` should be loaded from `harnesslock.toml`.
+/// `hlock upgrade`. `manifest` should be loaded from `harness.toml`.
 pub fn upgrade(manifest: Manifest, spec: &UpgradeSpec) -> Result<UpgradeOutcome> {
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let lock_path = cwd.join(LOCKFILE_PATH);

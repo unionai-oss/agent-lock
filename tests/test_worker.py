@@ -128,7 +128,7 @@ select = "min-cost"
 strategy = "grid"
 max_trials = 1
 """
-    (tmp_path / "harnesslock.toml").write_text(manifest)
+    (tmp_path / "harness.toml").write_text(manifest)
 
     import harness_lock as hlock
 
@@ -212,7 +212,7 @@ select = "min-cost"
 strategy = "grid"
 max_trials = 2
 """
-    (tmp_path / "harnesslock.toml").write_text(manifest)
+    (tmp_path / "harness.toml").write_text(manifest)
 
     import harness_lock as hlock
 

@@ -39,4 +39,4 @@ pub const LOCK_VERSION: i64 = 1;
 /// Default output filename for the lockfile.
 pub const LOCKFILE_PATH: &str = "harness.lock";
 /// Default manifest filename.
-pub const MANIFEST_PATH: &str = "harnesslock.toml";
+pub const MANIFEST_PATH: &str = "harness.toml";

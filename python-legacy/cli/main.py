@@ -19,14 +19,14 @@ def main() -> None:
 @main.command()
 @click.option("--name", default="agent", show_default=True, help="Project/agent name")
 @click.option("--pack", default="./tasks", show_default=True, help="Path to a task pack directory")
-@click.option("--force", is_flag=True, help="Overwrite an existing harnesslock.toml")
+@click.option("--force", is_flag=True, help="Overwrite an existing harness.toml")
 def init(name: str, pack: str, force: bool) -> None:
-    """Write a starter harnesslock.toml manifest."""
+    """Write a starter harness.toml manifest."""
     from pathlib import Path
 
-    p = Path("harnesslock.toml")
+    p = Path("harness.toml")
     if p.exists() and not force:
-        click.echo("harnesslock.toml already exists (use --force to overwrite)")
+        click.echo("harness.toml already exists (use --force to overwrite)")
         sys.exit(1)
     from hlock.scaffold import render_default_manifest
 
@@ -44,7 +44,7 @@ def resolve(backend: str | None, config: str | None, max_trials: int | None) -> 
     from hlock.api import resolve as _resolve
     from hlock.manifest import Manifest
 
-    m = Manifest.load("harnesslock.toml")
+    m = Manifest.load("harness.toml")
     if backend:
         m.backend.target = backend  # type: ignore[assignment]
     if max_trials is not None:
@@ -71,7 +71,7 @@ def check() -> None:
     from harness.lockfile import Lockfile
     from hlock.manifest import Manifest
 
-    m = Manifest.load("harnesslock.toml")
+    m = Manifest.load("harness.toml")
     lf = Lockfile.load("harness.lock")
     problems = lf.check_manifest(m.manifest_hash())
     if problems:
@@ -136,7 +136,7 @@ def backend_status(config: str | None) -> None:
     from hlock.manifest import Manifest
 
     try:
-        m = Manifest.load("harnesslock.toml")
+        m = Manifest.load("harness.toml")
     except Exception:
         m = None
     target = m.backend.target if m else "local"

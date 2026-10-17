@@ -80,7 +80,7 @@ def run_search(tuner, candidates, backend: Any) -> list[Any]:
     asyncio.run(flyte.init(**cfg))
     pipeline = build_pipeline()
     run = pipeline["run"]
-    asyncio.run(flyte.run(run, str(tuner.manifest.source_path or "harnesslock.toml"), "local"))
+    asyncio.run(flyte.run(run, str(tuner.manifest.source_path or "harness.toml"), "local"))
     # The pipeline wrote harness.lock; reconstruct TrialResults would require pulling a
     # remote artifact — for now report an empty sweep and let the driver read the lock.
     return []

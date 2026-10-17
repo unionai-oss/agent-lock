@@ -97,22 +97,22 @@ def test_upgrade_and_optimize(tmp_path, monkeypatch):
         "[objective]\nprimary='success-rate'\nselect='max-quality'\n"
         "[objective.constraints]\nsuccess-rate='>=0.5'\n[budget]\nstrategy='grid'\n"
     )
-    (tmp_path / "harnesslock.toml").write_text(manifest)
+    (tmp_path / "harness.toml").write_text(manifest)
 
-    hlock.resolve(manifest="harnesslock.toml", backend="local", workdir=str(tmp_path / ".harnesslock"))
+    hlock.resolve(manifest="harness.toml", backend="local", workdir=str(tmp_path / ".harnesslock"))
     assert (tmp_path / "harness.lock").exists()
 
-    plan = _json.loads(hlock.upgrade(manifest="harnesslock.toml", all=True))
+    plan = _json.loads(hlock.upgrade(manifest="harness.toml", all=True))
     assert plan["plan"]["upgradeable"] and plan["plan"]["upgradeable"][0]["to"] == "qwen-32b"
 
-    applied = _json.loads(hlock.upgrade(manifest="harnesslock.toml", all=True, apply=True))
+    applied = _json.loads(hlock.upgrade(manifest="harness.toml", all=True, apply=True))
     assert applied["applied"] is True
     assert (tmp_path / "harness.lock.prev").exists()
 
-    rolled = _json.loads(hlock.upgrade(manifest="harnesslock.toml", rollback=True))
+    rolled = _json.loads(hlock.upgrade(manifest="harness.toml", rollback=True))
     assert rolled["rolled_back"] is True
 
-    opt = _json.loads(hlock.optimize(manifest="harnesslock.toml", depth="hpo", out=str(tmp_path / "harness.opt.lock")))
+    opt = _json.loads(hlock.optimize(manifest="harness.toml", depth="hpo", out=str(tmp_path / "harness.opt.lock")))
     assert (tmp_path / "harness.opt.lock").exists()
     assert opt["report"]["depth"] == "hpo"
     # reload the opt lock and confirm it is marked optimized

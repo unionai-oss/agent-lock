@@ -10,7 +10,7 @@ your domain.
 
 | Package manager            | hlock                                                            |
 |----------------------------|----------------------------------------------------------------|
-| `pyproject.toml`           | `harnesslock.toml` — the **manifest**: what you allow and require |
+| `pyproject.toml`           | `harness.toml` — the **manifest**: what you allow and require |
 | dependency resolver        | **tuner**: search over LLMs × decision models × harnesses × policies |
 | `uv.lock`                  | `harness.lock` — the **lockfile**: what was chosen, pinned, hashed, plus the evidence |
 | CI `--locked` check        | `hlock check` — fail if the running stack drifts from the lock |
@@ -81,7 +81,7 @@ maturin develop -m crates/harness-lock/Cargo.toml      # builds + installs the h
 ## Quickstart (local, no accounts)
 
 ```bash
-hlock init --name demo --pack ./tasks   # write a starter harnesslock.toml
+hlock init --name demo --pack ./tasks   # write a starter harness.toml
 hlock resolve                              # tune the search space -> harness.lock + report
 hlock show                              # pretty-print the locked stack + evidence
 hlock check                             # static verification (CI-friendly exit code)

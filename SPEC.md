@@ -30,7 +30,7 @@ treats an agent system the way a package manager treats dependencies:
 
 | Package manager            | harness-lock                                                        |
 |----------------------------|-------------------------------------------------------------------|
-| `pyproject.toml`           | `harnesslock.toml`: the **manifest**. What you allow and require.   |
+| `pyproject.toml`           | `harness.toml`: the **manifest**. What you allow and require.   |
 | dependency resolver        | **tuner**: search over LLMs × decision models × harnesses × policies, scored against domain tasks |
 | `uv.lock` / `Cargo.lock`   | `harness.lock`: the **lockfile**. Exactly what was chosen, pinned and hashed, plus the evidence for choosing it |
 | `uv sync`                  | `hlock sync`: materialize the locked stack in an environment |
@@ -147,7 +147,7 @@ The result is agents that degrade silently and can't be rolled back, diffed, or 
 |---|---|
 | **Stack** | One concrete agent configuration: LLM assignment(s) + decision model + harness + tools + prompts + policies + runtime. |
 | **Component** | One axis of a stack (e.g. `llm.planner`, `decision.router`, `harness`, `policy.retries`). |
-| **Manifest** (`harnesslock.toml`) | User-authored constraints: candidate components, task packs, objectives, budget, backend. |
+| **Manifest** (`harness.toml`) | User-authored constraints: candidate components, task packs, objectives, budget, backend. |
 | **Search space** | The set of stacks implied by the manifest's candidates and constraints. |
 | **Task pack** | Versioned set of domain tasks + fixtures + graders. The unit of evaluation. |
 | **Trial** | One `(stack, task, seed)` execution. Produces a trace and grades. |
@@ -167,7 +167,7 @@ The result is agents that degrade silently and can't be rolled back, diffed, or 
 ### 4.1 The loop
 
 ```
- harnesslock.toml ─┐
+ harness.toml ─┐
  task packs ─────┤
                  ▼
           ┌─────────────┐   trials (fan-out)   ┌──────────────┐
@@ -212,7 +212,7 @@ The result is agents that degrade silently and can't be rolled back, diffed, or 
 lock-version = 1
 generated-by = "harness-lock 0.3.0"
 generated-at = "2026-10-16T14:02:11Z"
-manifest-hash = "sha256:9f1c…"          # harnesslock.toml that produced this lock
+manifest-hash = "sha256:9f1c…"          # harness.toml that produced this lock
 
 [stack]
 name = "ml-eng-debugger"
@@ -504,7 +504,7 @@ Enforcement happens at three points:
 1. **`hlock check`** (static, fast, offline-capable). Walks the component graph and
    runs each kind's checker. That verifies installed harness, MCP server, plugin, and LSP
    versions and integrity; skill directory and instruction-file digests; rendered config and
-   prompt hashes; the sandbox image digest; context isolation; and that `harnesslock.toml`
+   prompt hashes; the sandbox image digest; context isolation; and that `harness.toml`
    still hashes to `manifest-hash`. It also flags *undeclared* peripherals: a skill, hook,
    or MCP server present in the harness's config roots that isn't in the lock. Exit codes
    are CI-friendly.
@@ -639,7 +639,7 @@ ship it; at that point the optimizer's changes become pinned, enforced behavior 
 
 ---
 
-## 6. The manifest: `harnesslock.toml`
+## 6. The manifest: `harness.toml`
 
 User-authored. Declares candidates and constraints; the tuner resolves them into a lock.
 
@@ -1336,7 +1336,7 @@ The rule: **each layer down exposes more control and requires more knowledge. Fl
 only at Layer 3.** Layers 0–2 import nothing from `flyte` in user code.
 
 ```
-Layer 0  CLI + harnesslock.toml             "I have tasks and API keys"
+Layer 0  CLI + harness.toml             "I have tasks and API keys"
 Layer 1  Python API (hlock)          "I want to script and embed this"
 Layer 2  Extension points + profiles      "I need custom graders/strategies/adapters/resources"
 Layer 3  Flyte-native (hlock.flyte)  "I'm composing this into my own Flyte pipelines/infra"
@@ -1350,7 +1350,7 @@ scripts and for environments where `hlock` is already taken.
 
 ```bash
 pip install harness-lock
-hlock init                               # interactive: pick a pack, providers, harness → harnesslock.toml
+hlock init                               # interactive: pick a pack, providers, harness → harness.toml
 hlock resolve                               # tune → harness.lock (+ .harnesslock/report.html)
 hlock show                               # pretty-print the lock + evidence
 hlock tree                               # component dependency graph (models, harness, skills, MCP, capabilities, …)
@@ -1395,7 +1395,7 @@ dist/
 ```python
 import harness_lock as hlock
 
-manifest = hlock.Manifest.load("harnesslock.toml")
+manifest = hlock.Manifest.load("harness.toml")
 lock = harness.lock(manifest, backend="local")       # returns hlock.Lock; writes harness.lock
 print(lock.evidence.summary())
 
@@ -1495,7 +1495,7 @@ async def nightly_relock(manifest_path: str) -> str:
 
 if __name__ == "__main__":
     flyte.init_from_config()
-    run = flyte.run(nightly_relock, manifest_path="s3://acme/agents/harnesslock.toml")
+    run = flyte.run(nightly_relock, manifest_path="s3://acme/agents/harness.toml")
     print(run.url)
 ```
 
@@ -1637,7 +1637,7 @@ assistant" is neither defensible nor useful here.
 hlock/
   __init__.py            # Layer 1: lock(), load(), Manifest, SearchSpace, Objective, Budget, …
   cli/                   # Layer 0
-  manifest/              # harnesslock.toml parsing, validation, hashing
+  manifest/              # harness.toml parsing, validation, hashing
   lockfile/              # harness.lock schema, (de)serialization, diff, check
   store/                 # content-addressed blob store (local dir, s3/gcs/azure via fsspec)
   tasks/                 # task packs, graders, splits, Hub client
@@ -1655,7 +1655,7 @@ hlock/
   backends/              # Layer 2: Profile/Resources → Flyte mapping; local/devbox/cluster
   flyte/                 # Layer 3: envs, tasks, images (the tuning pipeline)
 examples/
-  research-agent/        # harnesslock.toml + committed harness.lock for each example
+  research-agent/        # harness.toml + committed harness.lock for each example
   data-analysis-agent/
   code-execution-agent/
 ```
@@ -1760,8 +1760,8 @@ Flyte/Union cluster backend docs.
 
 ## 16. Open questions
 
-1. **Name collision.** **Resolved:** the manifest is `harnesslock.toml` and the lockfile is `harness.lock`
-   (renamed from `harnesslock.toml` / `harness.lock`). Still worth checking `harness.lock` against other
+1. **Name collision.** **Resolved:** the manifest is `harness.toml` and the lockfile is `harness.lock`.
+   Still worth checking `harness.lock` against other
 tools' lockfiles before v1.0.
 2. **Lock scope.** One lock per agent, or a multi-harness lock (`[[agent]]` tables) for systems
    with several cooperating agents?
