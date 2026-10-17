@@ -392,7 +392,7 @@ def backend_status() -> None:
 
 
 def _default_manifest(name: str, pack: str) -> str:
-    return f"""# hlock manifest — declare what the tuner may try and what 'best' means.
+    return f"""# hlock manifest — declare what the resolver may try and what 'best' means.
 [project]
 name = "{name}"
 

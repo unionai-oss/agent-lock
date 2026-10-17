@@ -61,7 +61,7 @@ success rate Some(1.0) over 2 trials
 | Item | What it is |
 |---|---|
 | [`Manifest`](https://docs.rs/harness-lock-core/latest/harness_lock_core/manifest/struct.Manifest.html) | A parsed `harness.toml`: `load`, `from_str`, `manifest_hash`, `task_packs`, `backend_target` |
-| [`Tuner`](https://docs.rs/harness-lock-core/latest/harness_lock_core/tuner/struct.Tuner.html) | Runs the search: `new`, `with_backend`, `enumerate_stacks`, `run_trial`, `tune` |
+| [`Tuner`](https://docs.rs/harness-lock-core/latest/harness_lock_core/tuner/struct.Tuner.html) | The resolver: `new`, `with_backend`, `enumerate_stacks`, `run_trial`, `tune` |
 | [`Lockfile`](https://docs.rs/harness-lock-core/latest/harness_lock_core/lockfile/struct.Lockfile.html) | The `harness.lock` model: `load`, `from_str`, `save`, `check_manifest`, `summary`, and public fields for every section |
 | [`Backend`](https://docs.rs/harness-lock-core/latest/harness_lock_core/worker/enum.Backend.html) | `Local`, `Devbox`, or `Cluster`; `Backend::parse("devbox")` |
 | [`Store`](https://docs.rs/harness-lock-core/latest/harness_lock_core/store/struct.Store.html) | The content-addressed artifact store under `.harnesslock/` |
@@ -75,7 +75,7 @@ success rate Some(1.0) over 2 trials
 |---|---|
 | [`manifest`](https://docs.rs/harness-lock-core/latest/harness_lock_core/manifest/) | Manifest schema: candidates, objective, budget |
 | [`lockfile`](https://docs.rs/harness-lock-core/latest/harness_lock_core/lockfile/) | Lockfile schema: stack, policy, evidence, provenance |
-| [`tuner`](https://docs.rs/harness-lock-core/latest/harness_lock_core/tuner/) | Trial execution and lock construction |
+| [`tuner`](https://docs.rs/harness-lock-core/latest/harness_lock_core/tuner/) | The resolver: trial execution and lock construction |
 | [`search`](https://docs.rs/harness-lock-core/latest/harness_lock_core/search/) | Stacks, trial results, Pareto fronts, winner selection |
 | [`tasks`](https://docs.rs/harness-lock-core/latest/harness_lock_core/tasks/) | Task packs, the search/holdout split, grading |
 | [`ops`](https://docs.rs/harness-lock-core/latest/harness_lock_core/ops/) | `upgrade` and `optimize`, the engines behind those commands |

@@ -44,7 +44,7 @@ print(outcome)   # {'cost_usd': 0.0001, 'model': 'qwen-7b', 'success': True}
 resolve(manifest=None, backend=None, workdir=None) -> Lockfile
 ```
 
-Run the tuner and write `harness.lock` in the current directory.
+Run the resolver and write `harness.lock` in the current directory.
 
 | Parameter | Description |
 |---|---|

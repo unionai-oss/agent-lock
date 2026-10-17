@@ -63,8 +63,8 @@ If you've used `uv`, `cargo`, or `npm`, you already know the shape of `hlock`:
 
 | You know this from package managers | In `hlock` |
 |---|---|
-| `pyproject.toml` | **`harness.toml`**, the [manifest](reference/manifest.md): what the tuner may try, and what "best" means |
-| dependency resolver | **the tuner**: search over LLMs × decision models × harnesses × policies |
+| `pyproject.toml` | **`harness.toml`**, the [manifest](reference/manifest.md): what the resolver may try, and what "best" means |
+| dependency resolver | **the resolver**: search over LLMs × decision models × harnesses × policies |
 | `uv.lock` / `Cargo.lock` | **`harness.lock`**, the [lockfile](reference/lockfile.md): what was chosen, pinned and hashed, plus the evidence |
 | CI `--locked` check | **[`hlock check`](guides/ci.md)**: fail when the manifest drifts from the lock |
 

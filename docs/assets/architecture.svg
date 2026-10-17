@@ -44,7 +44,7 @@
     <text x="414" y="262" class="m" text-anchor="middle">store</text>
     <text x="546" y="262" class="m" text-anchor="middle">task packs</text>
     <text x="678" y="262" class="m" text-anchor="middle">search</text>
-    <text x="810" y="262" class="m" text-anchor="middle">tuner</text>
+    <text x="810" y="262" class="m" text-anchor="middle">resolver</text>
   </g>
 
   <!-- backends -->

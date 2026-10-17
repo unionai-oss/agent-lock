@@ -41,7 +41,7 @@ hlock init [--name NAME] [--pack PATH] [--force]
 
 ## `resolve`
 
-Run the tuner over the manifest's search space, write `harness.lock`, and print the
+Run the resolver over the manifest's search space, write `harness.lock`, and print the
 chosen stack with its evidence.
 
 ```bash

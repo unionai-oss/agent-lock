@@ -23,7 +23,7 @@ flowchart LR
 
 [`harness.toml`](../reference/manifest.md) is the part you write. It has four jobs:
 
-- **Candidates:** the models (per role), decision models, and harnesses the tuner may
+- **Candidates:** the models (per role), decision models, and harnesses the resolver may
   combine.
 - **Tasks:** which [task packs](../guides/task-packs.md) to measure against, and how
   many times to run each one.
@@ -31,7 +31,7 @@ flowchart LR
   among the stacks that pass.
 - **Budget and backend:** how much searching to do, and where the trials run.
 
-## The tuner
+## The resolver
 
 `hlock resolve` expands the candidates into a grid of concrete stacks: every planner
 model × every decision model × every harness. It then runs each stack on every task in

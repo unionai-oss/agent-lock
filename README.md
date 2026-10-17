@@ -32,8 +32,8 @@ actually works for your domain, along with the evidence for choosing it.
 
 | You know this from package managers | In `hlock` |
 |---|---|
-| 📄 `pyproject.toml` | **`harness.toml`**, the manifest: what the tuner may try, and what "best" means |
-| 🧮 dependency resolver | **the tuner**: search over LLMs × decision models × harnesses × policies |
+| 📄 `pyproject.toml` | **`harness.toml`**, the manifest: what the resolver may try, and what "best" means |
+| 🧮 dependency resolver | **the resolver**: search over LLMs × decision models × harnesses × policies |
 | 🔒 `uv.lock` / `Cargo.lock` | **`harness.lock`**, the lockfile: what was chosen, pinned and hashed, plus the evidence |
 | ✅ CI `--locked` check | **`hlock check`**: fail when the manifest drifts from the lock |
 

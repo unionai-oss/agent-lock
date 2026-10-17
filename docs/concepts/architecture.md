@@ -14,7 +14,7 @@ flowchart TB
 
     subgraph core["🦀 harness-lock-core  ·  Rust"]
         direction LR
-        MF["manifest"] ~~~ LK["lockfile"] ~~~ ST["store"] ~~~ TP["task packs"] ~~~ SR["search"] ~~~ TU["tuner"]
+        MF["manifest"] ~~~ LK["lockfile"] ~~~ ST["store"] ~~~ TP["task packs"] ~~~ SR["search"] ~~~ TU["resolver"]
     end
 
     py -- "PyO3 bindings" --> core
@@ -36,7 +36,7 @@ dependency. It owns:
 - **store**: a content-addressed store for trial artifacts under `.harnesslock/`
 - **task packs**: loading packs, the deterministic search/holdout split, and grading
 - **search**: grid expansion, Pareto fronts, constraint filtering, winner selection
-- **tuner**: running trials, aggregating evidence, and building the lock
+- **resolver** (the `tuner` module): running trials, aggregating evidence, and building the lock
 
 The core orchestrates and aggregates. It never does heavy compute itself.
 

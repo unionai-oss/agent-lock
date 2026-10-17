@@ -1,6 +1,6 @@
 # `harness.toml`
 
-The manifest declares what the tuner may try and what "best" means. `hlock init` writes
+The manifest declares what the resolver may try and what "best" means. `hlock init` writes
 a starter one. Every section is optional, but a useful manifest has at least
 `[tasks]`, `[candidates]`, and `[objective]`.
 
@@ -59,7 +59,7 @@ target = "local"
 
 ## `[candidates]`
 
-The search space. The tuner tries every combination.
+The search space. The resolver tries every combination.
 
 | Key | Description |
 |---|---|
@@ -82,7 +82,7 @@ v0.1 ships the `reference` provider (models `qwen-1.5b`, `qwen-7b`, `qwen-32b`) 
 
 Constraint metrics are `success-rate` and `cost-usd-per-task`. Comparisons are `>=`,
 `<=`, `>`, and `<` followed by a number. When no stack satisfies every constraint, the
-tuner selects from the whole Pareto front instead of failing; see
+resolver selects from the whole Pareto front instead of failing; see
 [Selection](../concepts/index.md#selection).
 
 ## `[budget]`
@@ -105,7 +105,7 @@ tuner selects from the whole Pareto front instead of failing; see
 `[tools]`, `[skills]`, `[instructions]`, `[context]`, and `[enforce]` are parsed and
 included in the manifest hash. They're placeholders for the peripherals described in
 the [design spec](https://github.com/unionai-oss/hlock/blob/main/SPEC.md), and
-the v0.1 tuner doesn't search over them yet.
+the v0.1 resolver doesn't search over them yet.
 
 ## The manifest hash
 

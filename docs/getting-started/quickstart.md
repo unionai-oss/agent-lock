@@ -26,7 +26,7 @@ $ hlock init --name demo --pack ./tasks
 next → hlock resolve
 ```
 
-`harness.toml` is the [manifest](../reference/manifest.md). It declares what the tuner
+`harness.toml` is the [manifest](../reference/manifest.md). It declares what the resolver
 may try and what "best" means:
 
 ```toml title="harness.toml"
@@ -88,7 +88,7 @@ $ hlock resolve
 next → hlock check  ·  hlock run "<prompt>"
 ```
 
-The tuner ran every combination of models and decision models on the task pack, kept
+The resolver ran every combination of models and decision models on the task pack, kept
 the [Pareto front](../concepts/index.md#selection), applied your constraints, and chose
 the cheapest stack that passed. Both 7B and 32B solved the demo tasks, so the cheaper
 7B model won.
