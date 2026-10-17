@@ -746,6 +746,50 @@ fn run_code_harness(prompt: String, path: String, workspace: Option<String>, tim
     Ok(json_str(serde_json::json!(r)))
 }
 
+/// Write a localized (all-local) copy of a lock to `out`. Evaluates candidates on
+/// `tasks` (a task pack path) or `./harness.toml`'s task packs when available.
+/// Returns JSON with the lock and the localize report.
+#[pyfunction]
+#[pyo3(signature = (path="harness.lock".to_string(), out="harness.local.lock".to_string(), harness=None, runtime=None, models=Vec::new(), memory_gb=None, tasks=None, strict=false, allow_network=false, workdir=None))]
+fn localize(
+    path: String,
+    out: String,
+    harness: Option<String>,
+    runtime: Option<String>,
+    models: Vec<String>,
+    memory_gb: Option<f64>,
+    tasks: Option<String>,
+    strict: bool,
+    allow_network: bool,
+    workdir: Option<String>,
+) -> PyResult<String> {
+    let (reg, ctx) = registry()?;
+    let manifest = match tasks {
+        Some(t) => Some(
+            core::Manifest::from_str(&format!(
+                "[tasks]\npacks = [{t:?}]\nseeds = 2\n[objective]\nprimary = \"success-rate\"\nselect = \"max-quality\"\n"
+            ))
+            .map_err(py_err)?,
+        ),
+        None => {
+            let p = ctx.cwd.join(core::MANIFEST_PATH);
+            if p.is_file() { Some(core::Manifest::load(&p).map_err(py_err)?) } else { None }
+        }
+    };
+    let opts = core::localize::LocalizeOptions {
+        harness,
+        runtime,
+        models,
+        memory_gb,
+        manifest,
+        strict,
+        allow_network,
+        workdir: PathBuf::from(workdir.unwrap_or_else(|| ".harnesslock/localize".to_string())),
+    };
+    let o = core::localize::localize_to(Path::new(&path), Path::new(&out), &reg, &ctx, &opts).map_err(py_err)?;
+    Ok(json_str(serde_json::json!({"lock": o.lock, "report": o.report, "path": out})))
+}
+
 #[pymodule]
 fn _harness_lock(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyManifest>()?;
@@ -770,6 +814,7 @@ fn _harness_lock(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(sync_dockerfile, m)?)?;
     m.add_function(wrap_pyfunction!(launch_prepare, m)?)?;
     m.add_function(wrap_pyfunction!(run_code_harness, m)?)?;
+    m.add_function(wrap_pyfunction!(localize, m)?)?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add("LOCK_VERSION", core::LOCK_VERSION)?;
     Ok(())

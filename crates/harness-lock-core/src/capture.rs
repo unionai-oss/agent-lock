@@ -128,7 +128,7 @@ pub fn render_config(v: &Value, format: &str) -> std::result::Result<String, Str
     }
 }
 
-fn drop_nulls(v: &Value) -> Value {
+pub(crate) fn drop_nulls(v: &Value) -> Value {
     match v {
         Value::Object(m) => Value::Object(m.iter().filter(|(_, v)| !v.is_null()).map(|(k, v)| (k.clone(), drop_nulls(v))).collect()),
         Value::Array(a) => Value::Array(a.iter().filter(|v| !v.is_null()).map(drop_nulls).collect()),

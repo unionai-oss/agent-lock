@@ -5,6 +5,8 @@ kind = "cli"
 aliases = ["pi-coding-agent", "pi-agent"]
 homepage = "https://pi.dev"
 support = "full"
+open-source = true
+local-models = true
 binaries = ["pi"]
 version = { args = ["--version"] }
 active-env = ["PI_CODING_AGENT", "PI_SESSION_ID"]
@@ -57,3 +59,11 @@ lockfile = "{root}/npm/package-lock.json"
 
 [launch]
 model-flag = "--model"
+
+# How `hlock localize` points this harness at a local OpenAI-compatible endpoint.
+[[local-provider]]
+file = "models"
+set = { "/providers/{provider}" = { baseUrl = "{base_url}", api = "openai-completions", apiKey = "local", models = [{ id = "{model}" }] } }
+[[local-provider]]
+file = "settings"
+set = { "/defaultProvider" = "{provider}", "/defaultModel" = "{model}" }

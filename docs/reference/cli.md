@@ -28,6 +28,7 @@ Failures print a one-line error with a hint and exit `1`.
 | [`run`](#run) | Run the locked agent on a prompt |
 | [`upgrade`](#upgrade) | Plan, apply, or roll back component upgrades |
 | [`optimize`](#optimize) | Tune prompts, hyperparameters, and small models into `harness.opt.lock` |
+| [`localize`](#localize) | Write an all-local equivalent of a lock |
 
 Global options: `-V`/`--version` and `-h`/`--help`.
 
@@ -266,6 +267,28 @@ hlock optimize [--depth LEVEL] [--data SOURCE] [OPTIONS]
 | `--max-trials N` | | Cap the number of trials |
 | `--backend` | manifest `[backend] target` | `local`, `devbox`, or `cluster` |
 | `--workdir DIR` | `.harnesslock` | Where trial artifacts go |
+
+## `localize`
+
+Replace a lock's proprietary harness and API models with local equivalents, and write the
+result to a new lock. See [Going local with localize](../guides/localize.md).
+
+```bash
+hlock localize [LOCK] [OPTIONS]
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `LOCK` | `harness.lock` | Lock to localize |
+| `-o`, `--out` | `harness.local.lock` | Where to write the localized lock |
+| `--harness` | the lock's, if local-capable, else the best installed | Local harness to use |
+| `--runtime` | the best installed | `ollama`, `lmstudio`, `llama-cpp`, `mlx-lm`, `vllm`, … |
+| `--models` | the runtime's catalog and weights on disk | Comma-separated model ids to consider |
+| `--memory-gb` | measured | Memory budget for model weights |
+| `--tasks` | `harness.toml`'s task packs | Task pack to evaluate candidates on |
+| `--strict` | | Drop remote MCP servers instead of flagging them |
+| `--allow-network` | | Keep self-hosted runtimes on your network |
+| `--json` | | Print the localize report as JSON |
 
 ## Exit codes
 

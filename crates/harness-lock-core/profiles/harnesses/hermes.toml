@@ -6,6 +6,8 @@ aliases = ["hermes-agent", "nous-hermes"]
 vendor = "Nous Research"
 homepage = "https://github.com/NousResearch/hermes-agent"
 support = "full"
+open-source = true
+local-models = true
 binaries = ["hermes"]
 version = { args = ["--version"] }
 active-env = ["HERMES_SESSION_ID", "HERMES_INTERACTIVE"]
@@ -38,3 +40,8 @@ builtin-manifest = "{root}/skills/.bundled_manifest"
 
 [launch]
 model-flag = "--model"
+
+# How `hlock localize` points this harness at a local OpenAI-compatible endpoint.
+[[local-provider]]
+file = "config"
+set = { "/model/provider" = "custom", "/model/default" = "{model}", "/model/base_url" = "{base_url}" }

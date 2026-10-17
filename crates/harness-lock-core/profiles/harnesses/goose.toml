@@ -6,6 +6,8 @@ aliases = ["block-goose"]
 vendor = "Block"
 homepage = "https://block.github.io/goose"
 support = "basic"
+open-source = true
+local-models = true
 binaries = ["goose"]
 version = { args = ["--version"] }
 config-root = { env = "XDG_CONFIG_HOME", suffix = "goose", default = "~/.config/goose" }
@@ -35,3 +37,8 @@ shape = "goose"
 [skills]
 dirs = ["~/.agents/skills", ".agents/skills"]
 write = "~/.agents/skills"
+
+# How `hlock localize` points this harness at a local OpenAI-compatible endpoint.
+[[local-provider]]
+file = "config"
+set = { "/GOOSE_PROVIDER" = "openai", "/GOOSE_MODEL" = "{model}", "/OPENAI_HOST" = "{host}", "/OPENAI_BASE_PATH" = "v1/chat/completions" }
