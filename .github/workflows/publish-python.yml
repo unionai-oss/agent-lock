@@ -74,8 +74,8 @@ jobs:
         include:
           - { platform: linux-x86_64, os: ubuntu-latest, target: x86_64 }
           - { platform: linux-aarch64, os: ubuntu-latest, target: aarch64 }
-          - { platform: macos-arm64, os: macos-14, target: aarch64 }
-          - { platform: macos-x86_64, os: macos-14, target: x86_64 }
+          - { platform: macos-arm64, os: macos-15, target: aarch64 }
+          - { platform: macos-x86_64, os: macos-15, target: x86_64 }
           - { platform: windows-x64, os: windows-latest, target: x64 }
     steps:
       - uses: actions/checkout@v4
