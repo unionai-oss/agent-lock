@@ -30,14 +30,14 @@ To work on a specific Python version, pass it once: `uv sync --python 3.9`.
 
 ```bash
 uv run pytest                                   # bindings, CLI, worker
-uv run ruff check harness_lock tests packaging/hlock
+uv run ruff check harness_lock hlock tests
 cargo test -p harness-lock-core                 # Rust core + integration tests
 ```
 
 Try the CLI against your working tree with `uv run hlock …`.
 
 CI runs the same checks on every PR, on Python 3.9, 3.12, and 3.13. It also builds
-the wheel, the sdist, and the `hlock` alias, installs them, and dry-runs
+the wheel, the sdist, and the `harness-lock` alias, installs them, and dry-runs
 `cargo publish` for all three crates.
 
 ## Dependencies

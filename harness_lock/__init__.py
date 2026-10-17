@@ -1,4 +1,4 @@
-"""harness-lock — lock your agent into place.
+"""hlock — make your agent harness pinnable, portable, and tunable.
 
 User-facing Python API, backed by the Rust core (compiled into ``harness_lock._harness_lock``).
 """

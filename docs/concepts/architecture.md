@@ -80,9 +80,10 @@ runnable in CI and on a bare install.
 |---|---|
 | `crates/harness-lock-core` | The Rust core library |
 | `crates/harness-lock-py` | PyO3 bindings, shipped only inside the wheel (`publish = false`) |
-| `crates/harness-lock`, `crates/hlock` | Thin crates that re-export the core under both names |
+| `crates/hlock`, `crates/harness-lock` | Thin crates that re-export the core (`harness-lock` is the alias) |
 | `harness_lock/` | The Python package: bindings re-export, CLI, worker |
-| `packaging/hlock` | The `hlock` PyPI alias, pinned to the matching `harness-lock` |
+| `hlock/` | Shim that re-exports `harness_lock`, so `import hlock` works |
+| `packaging/harness-lock` | The `harness-lock` PyPI alias, pinned to the matching `hlock` |
 | `tasks/` | The demo task pack |
 | `docs/` | This site |
 | `SPEC.md` | The full design, including what's still on the roadmap |

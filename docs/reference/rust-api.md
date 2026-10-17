@@ -1,13 +1,13 @@
 # Rust API
 
-The core of `hlock` is a Rust library, published on crates.io under three names that
-all expose the same API:
+The core of `hlock` is a Rust library, published on crates.io as `hlock`. Two other
+crates expose the same API:
 
 | Crate | Use it when |
 |---|---|
-| [`hlock`](https://crates.io/crates/hlock) | You want the short name: `hlock::Manifest`, `hlock::Tuner`, … |
-| [`harness-lock`](https://crates.io/crates/harness-lock) | You prefer the long name |
-| [`harness-lock-core`](https://crates.io/crates/harness-lock-core) | You depend on the core crate directly |
+| [`hlock`](https://crates.io/crates/hlock) | The default: `hlock::Manifest`, `hlock::Tuner`, … |
+| [`harness-lock`](https://crates.io/crates/harness-lock) | An alias for `hlock`, under `harness_lock::…` |
+| [`harness-lock-core`](https://crates.io/crates/harness-lock-core) | You depend on the implementation crate directly |
 
 ```bash
 cargo add hlock

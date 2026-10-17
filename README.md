@@ -12,7 +12,7 @@
 [![crates.io](https://img.shields.io/crates/v/hlock?color=E6532D&logo=rust&logoColor=white)](https://crates.io/crates/hlock)
 [![CI](https://img.shields.io/github/actions/workflow/status/unionai-oss/hlock/ci.yml?branch=main&label=ci&logo=github)](https://github.com/unionai-oss/hlock/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/badge/docs-unionai--oss.github.io-7C3AED?logo=readthedocs&logoColor=white)](https://unionai-oss.github.io/hlock/)
-[![Python](https://img.shields.io/pypi/pyversions/harness-lock?logo=python&logoColor=white)](https://pypi.org/project/hlock/)
+[![Python](https://img.shields.io/pypi/pyversions/hlock?logo=python&logoColor=white)](https://pypi.org/project/hlock/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/unionai-oss/hlock/blob/main/LICENSE)
 
 [**Documentation**](https://unionai-oss.github.io/hlock/) ·
@@ -47,7 +47,7 @@ Prebuilt wheels cover Linux (x86_64, aarch64), macOS (arm64, x86_64), and Window
 for CPython 3.9+. For Rust, use `cargo add hlock`.
 
 > [!NOTE]
-> `hlock` is the short name for [`harness-lock`](https://pypi.org/project/harness-lock/).
+> [`harness-lock`](https://pypi.org/project/harness-lock/) is an alias for `hlock`.
 > Both names install the same package at the same version, so `import hlock` and
 > `import harness_lock` are the same API.
 
@@ -116,9 +116,10 @@ Flyte task on a cluster.
 |---|---|
 | [`crates/harness-lock-core`](https://github.com/unionai-oss/hlock/tree/main/crates/harness-lock-core) | The core library (pure Rust): manifests, lockfiles, search planning, trial bookkeeping, evidence, lock construction. It orchestrates and aggregates, and never does heavy compute itself. |
 | [`crates/harness-lock-py`](https://github.com/unionai-oss/hlock/tree/main/crates/harness-lock-py) | PyO3 bindings, compiled into `harness_lock._harness_lock` and shipped only inside the wheel. |
-| [`crates/harness-lock`](https://github.com/unionai-oss/hlock/tree/main/crates/harness-lock), [`crates/hlock`](https://github.com/unionai-oss/hlock/tree/main/crates/hlock) | Thin crates that re-export the core under both names. |
+| [`crates/hlock`](https://github.com/unionai-oss/hlock/tree/main/crates/hlock), [`crates/harness-lock`](https://github.com/unionai-oss/hlock/tree/main/crates/harness-lock) | Thin crates that re-export the core (`harness-lock` is the alias). |
 | [`harness_lock/`](https://github.com/unionai-oss/hlock/tree/main/harness_lock) | The Python package: the `hlock` CLI and the heavy-work worker ([`tasks/worker.py`](https://github.com/unionai-oss/hlock/blob/main/harness_lock/tasks/worker.py)). |
-| [`packaging/hlock`](https://github.com/unionai-oss/hlock/tree/main/packaging/hlock) | The `hlock` PyPI alias, which pins the matching `harness-lock` release. |
+| [`hlock/`](https://github.com/unionai-oss/hlock/tree/main/hlock) | A shim that re-exports `harness_lock`, so `import hlock` works. |
+| [`packaging/harness-lock`](https://github.com/unionai-oss/hlock/tree/main/packaging/harness-lock) | The `harness-lock` PyPI alias, which pins the matching `hlock` release. |
 | [`docs/`](https://github.com/unionai-oss/hlock/tree/main/docs) | The documentation site ([Zensical](https://zensical.org)), published to GitHub Pages. |
 
 ## Backends
@@ -145,7 +146,7 @@ Development uses [uv](https://docs.astral.sh/uv/) and a Rust toolchain.
 ```bash
 uv sync                            # create .venv, build the Rust extension, install dev tools
 uv run pytest                      # Python bindings, CLI, worker
-uv run ruff check harness_lock tests packaging/hlock
+uv run ruff check harness_lock hlock tests
 cargo test -p harness-lock-core    # Rust core + integration tests
 
 uv run --group docs zensical serve # docs at http://localhost:8000

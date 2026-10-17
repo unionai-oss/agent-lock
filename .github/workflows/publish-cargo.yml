@@ -2,8 +2,8 @@ name: publish-cargo
 
 # Publishes the Rust crates to crates.io, in dependency order:
 #   harness-lock-core  the library
-#   harness-lock       re-exports harness-lock-core (`cargo add harness-lock`)
-#   hlock              the same facade under the short name (`cargo add hlock`)
+#   hlock              re-exports harness-lock-core (`cargo add hlock`)
+#   harness-lock       the same facade under the alias name (`cargo add harness-lock`)
 # `cargo publish --workspace` orders them and skips the PyO3 bindings crate
 # (`harness-lock-py`, `publish = false`), which ships only inside the PyPI wheel.
 #
@@ -59,7 +59,7 @@ jobs:
         run: cargo publish --workspace --dry-run --locked
 
   publish:
-    name: Publish harness-lock-core, harness-lock, hlock
+    name: Publish harness-lock-core, hlock, harness-lock
     needs: verify
     if: github.event_name == 'push' || inputs.dry_run == false
     runs-on: ubuntu-latest

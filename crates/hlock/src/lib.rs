@@ -1,7 +1,9 @@
-//! hlock: the short name for [harness-lock](https://crates.io/crates/harness-lock).
+//! hlock: make your agent harness pinnable, portable, and tunable.
 //!
-//! Re-exports [`harness_lock_core`], so `cargo add hlock` gives you the same manifest,
-//! lockfile, store, and tuning APIs as `harness-lock`, under `hlock::…`.
+//! This crate is the published Rust entry point for hlock. It re-exports
+//! [`harness_lock_core`], so `cargo add hlock` gives you the manifest, lockfile, store,
+//! and tuning APIs under `hlock::…`. The same API is also published under the alias
+//! [`harness-lock`](https://crates.io/crates/harness-lock).
 
 pub use harness_lock_core::*;
 

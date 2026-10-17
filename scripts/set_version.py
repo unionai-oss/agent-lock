@@ -5,11 +5,11 @@ The Cargo workspace (``[workspace.package].version`` in ``Cargo.toml``) is the s
 of truth. Everything else follows it:
 
 * every crate that depends on ``harness-lock-core`` pins it exactly (``=X.Y.Z``), so
-  the published ``harness-lock`` and ``hlock`` crates always match the core release;
-* the ``harness-lock`` Python package reads the version through maturin
+  the published ``hlock`` and ``harness-lock`` crates always match the core release;
+* the ``hlock`` Python package reads the version through maturin
   (``dynamic = ["version"]`` in ``pyproject.toml``);
-* the ``hlock`` Python alias (``packaging/hlock``) carries the same version and pins
-  ``harness-lock==X.Y.Z``.
+* the ``harness-lock`` Python alias (``packaging/harness-lock``) carries the same
+  version and pins ``hlock==X.Y.Z``.
 
 Usage:
     python scripts/set_version.py --print           # print the current version
@@ -30,7 +30,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 WORKSPACE = ROOT / "Cargo.toml"
 PYPROJECT = ROOT / "pyproject.toml"
-HLOCK_PYPROJECT = ROOT / "packaging" / "hlock" / "pyproject.toml"
+ALIAS_PYPROJECT = ROOT / "packaging" / "harness-lock" / "pyproject.toml"
+ALIAS = ALIAS_PYPROJECT.relative_to(ROOT)
 CORE = "harness-lock-core"
 # Crates that depend on the core crate (the PyO3 bindings and the two published facades).
 DEPENDENTS = [ROOT / "crates" / name / "Cargo.toml" for name in ("harness-lock-py", "harness-lock", "hlock")]
@@ -42,10 +43,10 @@ PEP440_PRE = {"alpha": "a", "a": "a", "beta": "b", "b": "b", "rc": "rc"}
 WORKSPACE_VERSION = re.compile(r'(\[workspace\.package\][^\[]*?^version\s*=\s*")([^"]+)(")', re.M | re.S)
 # `harness-lock-core = { …, version = "=…" }` in a dependent crate.
 CORE_DEP_VERSION = re.compile(rf'(^{CORE}\s*=\s*\{{[^}}]*?version\s*=\s*"=?)([^"]+)(")', re.M)
-# `version = "…"` in the [project] table of the hlock pyproject.
+# `version = "…"` in the [project] table of the harness-lock alias pyproject.
 PROJECT_VERSION = re.compile(r'(\[project\][^\[]*?^version\s*=\s*")([^"]+)(")', re.M | re.S)
-# Every `harness-lock==…` / `harness-lock[extra]==…` pin in the hlock pyproject.
-HARNESS_LOCK_PIN = re.compile(r'("harness-lock(?:\[[^\]]*\])?==)([^"]+)(")')
+# Every `hlock==…` / `hlock[extra]==…` pin in the harness-lock alias pyproject.
+HLOCK_PIN = re.compile(r'("hlock(?:\[[^\]]*\])?==)([^"]+)(")')
 
 
 def pep440(version: str) -> str:
@@ -75,16 +76,16 @@ def check(tag: str | None) -> int:
         errors.append(f'pyproject.toml: expected dynamic = ["version"], found static {project.get("version")!r}')
 
     py_version = pep440(version)
-    hlock_text = HLOCK_PYPROJECT.read_text()
-    hlock = tomllib.loads(hlock_text)["project"]
-    if hlock["version"] != py_version:
-        errors.append(f"packaging/hlock/pyproject.toml: version {hlock['version']!r} != {py_version!r}")
-    pins = HARNESS_LOCK_PIN.findall(hlock_text)
+    alias_text = ALIAS_PYPROJECT.read_text()
+    alias = tomllib.loads(alias_text)["project"]
+    if alias["version"] != py_version:
+        errors.append(f"{ALIAS}: version {alias['version']!r} != {py_version!r}")
+    pins = HLOCK_PIN.findall(alias_text)
     if not pins:
-        errors.append("packaging/hlock/pyproject.toml: no harness-lock==… pin found")
+        errors.append(f"{ALIAS}: no hlock==… pin found")
     for _, pinned, _ in pins:
         if pinned != py_version:
-            errors.append(f"packaging/hlock/pyproject.toml: harness-lock pin {pinned!r} != {py_version!r}")
+            errors.append(f"{ALIAS}: hlock pin {pinned!r} != {py_version!r}")
 
     if tag is not None and tag.removeprefix("v") != version:
         errors.append(f"tag {tag!r} does not match version {version!r}; run scripts/set_version.py {tag.removeprefix('v')} and re-tag")
@@ -109,8 +110,8 @@ def bump(version: str) -> int:
     substitute(WORKSPACE, WORKSPACE_VERSION, version)
     for path in DEPENDENTS:
         substitute(path, CORE_DEP_VERSION, version)
-    substitute(HLOCK_PYPROJECT, PROJECT_VERSION, py_version)
-    substitute(HLOCK_PYPROJECT, HARNESS_LOCK_PIN, py_version, every=True)
+    substitute(ALIAS_PYPROJECT, PROJECT_VERSION, py_version)
+    substitute(ALIAS_PYPROJECT, HLOCK_PIN, py_version, every=True)
     # Refresh the workspace members' entries in Cargo.lock without touching other deps.
     subprocess.run(["cargo", "update", "--workspace", "--offline"], cwd=ROOT, check=False)
     return check(None)

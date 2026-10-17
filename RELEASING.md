@@ -1,15 +1,15 @@
-# Releasing harness-lock
+# Releasing hlock
 
-harness-lock is installable under two names on each registry: `harness-lock` and the
-short `hlock`. One tag publishes all of them:
+hlock is published as `hlock` on each registry, with `harness-lock` as an alias. One tag
+publishes all of them:
 
 | Registry | Package | What it is | Workflow |
 |---|---|---|---|
-| PyPI | `harness-lock` | the package: wheels for Linux x86_64/aarch64, macOS arm64/x86_64, Windows x64, plus an sdist | `publish-python.yml` |
-| PyPI | `hlock` | pure-Python alias (`packaging/hlock`): pins `harness-lock==<same version>`, re-exports it as `import hlock` | `publish-python.yml` |
+| PyPI | `hlock` | the package: wheels for Linux x86_64/aarch64, macOS arm64/x86_64, Windows x64, plus an sdist. Ships both `import hlock` and `import harness_lock` | `publish-python.yml` |
+| PyPI | `harness-lock` | code-free alias (`packaging/harness-lock`): pins `hlock==<same version>` | `publish-python.yml` |
 | crates.io | `harness-lock-core` | the Rust library | `publish-cargo.yml` |
-| crates.io | `harness-lock` | re-exports `harness-lock-core` (`cargo add harness-lock`) | `publish-cargo.yml` |
 | crates.io | `hlock` | re-exports `harness-lock-core` (`cargo add hlock`) | `publish-cargo.yml` |
+| crates.io | `harness-lock` | alias: re-exports `harness-lock-core` (`cargo add harness-lock`) | `publish-cargo.yml` |
 
 PyPI uses trusted publishing (OIDC) under the unionai-oss PyPI account. crates.io uses a
 `CARGO_REGISTRY_TOKEN` until the crates exist, then trusted publishing.
@@ -17,7 +17,9 @@ PyPI uses trusted publishing (OIDC) under the unionai-oss PyPI account. crates.i
 Why the aliases are thin rather than full copies: the PyPI wheel is compiled, and two
 distributions shipping the same `harness_lock` module would overwrite each other when
 both are installed. With the alias, `pip install hlock` and `pip install harness-lock`
-install the identical package, and installing both is harmless. The same goes for the
+install the identical package, and installing both is harmless. (Through 0.1.2 the roles
+were reversed. Upgrading an old environment with pip can clobber `harness_lock`; see the
+upgrade note in `docs/getting-started/installation.md`.) The same goes for the
 crates: one implementation (`harness-lock-core`), two names that re-export it.
 
 The PyO3 bindings crate (`crates/harness-lock-py`) is `publish = false`: it's a Python
@@ -25,9 +27,9 @@ extension module, not linkable from Rust, and ships only inside the PyPI wheel.
 
 The version lives in one place, `[workspace.package].version` in `Cargo.toml`.
 `scripts/set_version.py` keeps every other copy in step: maturin reads the workspace
-version for `harness-lock` (`dynamic = ["version"]`), the `harness-lock` and `hlock` crates
-pin `harness-lock-core = "=X.Y.Z"`, and `packaging/hlock/pyproject.toml` carries the
-version and the `harness-lock==X.Y.Z` pin (PEP 440 spelling, e.g. `0.2.0rc1` for
+version for `hlock` (`dynamic = ["version"]`), the `hlock` and `harness-lock` crates
+pin `harness-lock-core = "=X.Y.Z"`, and `packaging/harness-lock/pyproject.toml` carries
+the version and the `hlock==X.Y.Z` pin (PEP 440 spelling, e.g. `0.2.0rc1` for
 `0.2.0-rc.1`).
 
 ## First-time setup
@@ -39,8 +41,8 @@ Needed once per repository, not once per release.
 - [ ] Make sure Actions runs for this repo (org Settings → Actions: enabled, allowed
       actions include `PyO3/maturin-action`, `pypa/gh-action-pypi-publish`,
       `dtolnay/rust-toolchain`, `Swatinem/rust-cache`).
-- [ ] Create two environments (Settings → Environments): `pypi`, which publishes
-      `harness-lock`, and `pypi-hlock`, which publishes `hlock`. Give them the same
+- [ ] Create two environments (Settings → Environments): `pypi-hlock`, which publishes
+      `hlock`, and `pypi`, which publishes `harness-lock`. Give them the same
       deployment tag rules and required reviewers, if you want a human gate before each
       publish.
 - [ ] Create an environment named `crates-io` and add the `CARGO_REGISTRY_TOKEN`
@@ -52,13 +54,13 @@ and add two **pending publishers**, one per package name (the projects don't exi
 the first upload). They differ in project name and environment; PyPI won't register two
 pending publishers with identical owner/repository/workflow/environment:
 
-| Field | `harness-lock` | `hlock` |
+| Field | `hlock` | `harness-lock` |
 |---|---|---|
-| PyPI project name | `harness-lock` | `hlock` |
+| PyPI project name | `hlock` | `harness-lock` |
 | Owner | `unionai-oss` | `unionai-oss` |
 | Repository name | `hlock` | `hlock` |
 | Workflow name | `publish-python.yml` | `publish-python.yml` |
-| Environment name | `pypi` | `pypi-hlock` |
+| Environment name | `pypi-hlock` | `pypi` |
 
 No API token is stored anywhere. The publish jobs' `id-token: write` permission is
 what authenticates.
@@ -82,9 +84,9 @@ what authenticates.
        python scripts/set_version.py --check   # prints 0.2.0
        ```
        Commit the changed files (`Cargo.toml`, `Cargo.lock`, `crates/*/Cargo.toml`,
-       `packaging/hlock/pyproject.toml`), open a PR, and wait for `ci` to go green. Its
-       `packaging` job builds the wheel, sdist, and `hlock` alias, runs `twine check`,
-       installs `hlock` (which pulls in the matching `harness-lock`), and runs
+       `packaging/harness-lock/pyproject.toml`), open a PR, and wait for `ci` to go green.
+       Its `packaging` job builds the wheel, sdist, and `harness-lock` alias, runs
+       `twine check`, installs `harness-lock` (which pulls in the matching `hlock`), and runs
        `cargo publish --workspace --dry-run` for all three crates.
 2. [ ] Optional rehearsal: run **publish-python** and **publish-cargo** manually from
        `main` with `dry_run: true` (the default). They build and verify every artifact
@@ -95,20 +97,20 @@ what authenticates.
        git tag v0.2.0 && git push origin v0.2.0
        ```
        Both publish workflows refuse to run if the tag doesn't match the version.
-4. [ ] Approve the `pypi` / `pypi-hlock` / `crates-io` environment deployments if reviewers are required.
+4. [ ] Approve the `pypi-hlock` / `pypi` / `crates-io` environment deployments if reviewers are required.
 5. [ ] Check the results:
-       - <https://pypi.org/project/harness-lock/> lists the version with 5 wheels + sdist
-       - <https://pypi.org/project/hlock/> lists the same version (1 wheel + sdist)
-       - <https://crates.io/crates/harness-lock-core>, <https://crates.io/crates/harness-lock>,
-         and <https://crates.io/crates/hlock> list the version; docs.rs builds
+       - <https://pypi.org/project/hlock/> lists the version with 5 wheels + sdist
+       - <https://pypi.org/project/harness-lock/> lists the same version (1 wheel + sdist)
+       - <https://crates.io/crates/harness-lock-core>, <https://crates.io/crates/hlock>,
+         and <https://crates.io/crates/harness-lock> list the version; docs.rs builds
        - a GitHub release for the tag exists with the artifacts attached
 6. [ ] Smoke-test from a clean environment:
        ```bash
-       uvx --from harness-lock==0.2.0 hlock --version
        uvx --from hlock==0.2.0 hlock --version
+       uvx --from harness-lock==0.2.0 harness-lock --version
        python -c "import hlock, harness_lock; print(hlock.__version__, harness_lock.__version__)"
        ```
-       and in a scratch Rust project: `cargo add harness-lock hlock && cargo build`.
+       and in a scratch Rust project: `cargo add hlock harness-lock && cargo build`.
 
 ## If something goes wrong
 

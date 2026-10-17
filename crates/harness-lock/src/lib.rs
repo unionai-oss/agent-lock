@@ -1,9 +1,8 @@
-//! harness-lock: lock your agent into place.
+//! harness-lock: an alias for [hlock](https://crates.io/crates/hlock).
 //!
-//! This crate is the published Rust entry point for harness-lock. It re-exports
-//! [`harness_lock_core`], so `cargo add harness-lock` gives you the manifest,
-//! lockfile, store, and tuning APIs under `harness_lock::…`. The same API is also
-//! published under the shorter name [`hlock`](https://crates.io/crates/hlock).
+//! Re-exports [`harness_lock_core`], so `cargo add harness-lock` gives you the same
+//! manifest, lockfile, store, and tuning APIs as `hlock`, under `harness_lock::…`.
+//! Prefer `cargo add hlock` in new projects.
 
 pub use harness_lock_core::*;
 
