@@ -9,7 +9,7 @@ Quick version:
 ```bash
 uv sync
 uv run pytest
-uv run ruff check harness_lock tests packaging/hlock
+uv run ruff check harness_lock hlock tests
 cargo test -p harness-lock-core
 ```
 

@@ -35,7 +35,7 @@ looks like. For setting up a working copy, see [Development](development.md).
 
     ```bash
     uv run pytest
-    uv run ruff check harness_lock tests packaging/hlock
+    uv run ruff check harness_lock hlock tests
     cargo test -p harness-lock-core
     uv run --group docs zensical build --clean   # if you touched docs/
     ```

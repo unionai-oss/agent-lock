@@ -45,12 +45,26 @@ $ hlock --version
 hlock, version 0.1.2
 ```
 
-!!! info "`hlock` and `harness-lock` are the same package"
+!!! info "`harness-lock` is an alias for `hlock`"
 
-    `hlock` is the short name for [`harness-lock`](https://pypi.org/project/harness-lock/).
-    Each `hlock` release pins the identical `harness-lock` release, so installing either
-    name gives you the same `hlock` command and the same API: `import hlock` and
+    [`harness-lock`](https://pypi.org/project/harness-lock/) is published as an alias:
+    each release pins the identical `hlock` release, so installing either name gives you
+    the same `hlock` (and `harness-lock`) command and the same API. `import hlock` and
     `import harness_lock` are interchangeable. These docs use `hlock` everywhere.
+
+!!! warning "Upgrading from 0.1.2 or earlier with pip"
+
+    Through 0.1.2 the roles were reversed: `harness-lock` was the package and `hlock` the
+    alias. Both the old `harness-lock` and the new `hlock` contain the `harness_lock`
+    module, so `pip install -U harness-lock` in an existing 0.1.2 environment can leave
+    `harness_lock` half removed (`import hlock` then fails with an `ImportError`).
+    Reinstall cleanly instead:
+
+    ```bash
+    pip uninstall -y harness-lock hlock && pip install hlock
+    ```
+
+    `uv` upgrades in place without this problem.
 
 ## Optional extras
 
@@ -65,13 +79,14 @@ see [Backends](../guides/backends.md).
 
 ## Use it from Rust
 
-The core library is published on crates.io under the same names:
+The core library is published on crates.io as `hlock`:
 
 ```bash
-cargo add hlock               # or: cargo add harness-lock
+cargo add hlock
 ```
 
-Both crates re-export [`harness-lock-core`](https://crates.io/crates/harness-lock-core).
+`hlock` (and its alias crate, `harness-lock`) re-export
+[`harness-lock-core`](https://crates.io/crates/harness-lock-core).
 See the [Rust API](../reference/rust-api.md) reference for an example and the key types.
 
 ## Build from source

@@ -3,11 +3,11 @@ requires = ["maturin>=1.5,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "harness-lock"
+name = "hlock"
 # Read by maturin from the Cargo workspace ([workspace.package].version), the single
 # source of truth. Bump it with `python scripts/set_version.py X.Y.Z`.
 dynamic = ["version"]
-description = "Lock your agent into place — tune your agent stack and pin it (Rust core + Python bindings)."
+description = "Make your agent harness pinnable, portable, and tunable: tune your agent stack against your own tasks, then pin the winner in a harness.lock."
 readme = "README.md"
 requires-python = ">=3.9"
 license = "Apache-2.0"
@@ -24,6 +24,12 @@ dependencies = [
     "rich>=13.0",
     "rich-click>=1.8",
 ]
+
+[project.urls]
+Homepage = "https://github.com/unionai-oss/hlock"
+Documentation = "https://unionai-oss.github.io/hlock/"
+Source = "https://github.com/unionai-oss/hlock"
+Issues = "https://github.com/unionai-oss/hlock/issues"
 
 [project.optional-dependencies]
 dev = [
@@ -50,10 +56,15 @@ docs = [
 hlock = "harness_lock.cli:main"
 harness-lock = "harness_lock.cli:main"
 
+# The wheel ships two importable packages: `harness_lock` (the implementation, with the
+# compiled `harness_lock._harness_lock` module) and `hlock` (a re-export shim, so
+# `import hlock` matches the distribution name). The `harness-lock` PyPI name is a
+# code-free alias in packaging/harness-lock that pins this package.
 [tool.maturin]
 manifest-path = "crates/harness-lock-py/Cargo.toml"
 module-name = "harness_lock._harness_lock"
 python-source = "."
+python-packages = ["hlock"]
 
 [tool.uv]
 # Rebuild the Rust extension on `uv sync` / `uv run` whenever Rust sources change.

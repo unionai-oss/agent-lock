@@ -4,10 +4,10 @@ One tag publishes everything:
 
 | Registry | Package | What it is |
 |---|---|---|
-| PyPI | [`harness-lock`](https://pypi.org/project/harness-lock/) | Wheels for Linux, macOS, and Windows, plus an sdist |
-| PyPI | [`hlock`](https://pypi.org/project/hlock/) | Alias that pins the same `harness-lock` version |
+| PyPI | [`hlock`](https://pypi.org/project/hlock/) | Wheels for Linux, macOS, and Windows, plus an sdist |
+| PyPI | [`harness-lock`](https://pypi.org/project/harness-lock/) | Alias that pins the same `hlock` version |
 | crates.io | [`harness-lock-core`](https://crates.io/crates/harness-lock-core) | The Rust library |
-| crates.io | [`harness-lock`](https://crates.io/crates/harness-lock), [`hlock`](https://crates.io/crates/hlock) | Re-exports of the core |
+| crates.io | [`hlock`](https://crates.io/crates/hlock), [`harness-lock`](https://crates.io/crates/harness-lock) | Re-exports of the core (`harness-lock` is the alias) |
 
 ## Cutting a release
 

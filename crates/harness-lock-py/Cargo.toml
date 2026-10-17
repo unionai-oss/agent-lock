@@ -5,10 +5,10 @@ edition.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Python bindings for harness-lock."
+description = "Python bindings for hlock."
 # Built as a Python extension module (pyo3 `extension-module`), so it isn't linkable
-# from Rust. It ships inside the `harness-lock` PyPI wheel. The crates.io names
-# `harness-lock` and `hlock` are the Rust library facades in ../harness-lock and ../hlock.
+# from Rust. It ships inside the `hlock` PyPI wheel. The crates.io names
+# `hlock` and `harness-lock` are the Rust library facades in ../hlock and ../harness-lock.
 publish = false
 
 [lib]

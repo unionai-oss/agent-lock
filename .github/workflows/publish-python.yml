@@ -1,10 +1,11 @@
 name: publish-python
 
 # Publishes two PyPI names under the unionai-oss PyPI account, via trusted publishing:
-#   harness-lock  the package (Rust core + PyO3 bindings, built with maturin)
-#   hlock         the short name: a pure-Python alias (packaging/hlock) that pins
-#                 harness-lock==<same version> and re-exports it as `import hlock`
-# harness-lock publishes first, so `pip install hlock` never points at a missing release.
+#   hlock         the package (Rust core + PyO3 bindings, built with maturin); ships
+#                 both `import hlock` and `import harness_lock`
+#   harness-lock  the alias: a code-free package (packaging/harness-lock) that pins
+#                 hlock==<same version>
+# hlock publishes first, so `pip install harness-lock` never points at a missing release.
 #
 # Release: `python scripts/set_version.py X.Y.Z`, merge to main, then push tag vX.Y.Z.
 # The version job refuses to continue unless the tag matches the Cargo workspace version.
@@ -13,8 +14,8 @@ name: publish-python
 # and stop before publishing. Set `dry_run: false` to publish from a manual run.
 #
 # One-time setup (see RELEASING.md):
-#   - two GitHub environments: `pypi` (publishes harness-lock) and `pypi-hlock`
-#     (publishes hlock)
+#   - two GitHub environments: `pypi-hlock` (publishes hlock) and `pypi`
+#     (publishes harness-lock)
 #   - one PyPI trusted publisher per package name, added while logged in as the
 #     unionai-oss PyPI account (as *pending* publishers before the first release, since
 #     the projects don't exist yet): owner `unionai-oss`, repository `hlock`,
@@ -108,8 +109,8 @@ jobs:
           name: dist-sdist
           path: dist
 
-  hlock:
-    name: hlock alias package
+  alias:
+    name: harness-lock alias package
     needs: version
     runs-on: ubuntu-latest
     steps:
@@ -120,15 +121,15 @@ jobs:
       - name: Build sdist + wheel
         run: |
           python -m pip install --upgrade build
-          python -m build packaging/hlock --outdir dist
+          python -m build packaging/harness-lock --outdir dist
       - uses: actions/upload-artifact@v4
         with:
-          name: hlock-dist
+          name: harness-lock-dist
           path: dist
 
   verify:
     name: Verify distributions
-    needs: [version, wheels, sdist, hlock]
+    needs: [version, wheels, sdist, alias]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -138,16 +139,16 @@ jobs:
           merge-multiple: true
       - uses: actions/download-artifact@v4
         with:
-          name: hlock-dist
-          path: hlock-dist
+          name: harness-lock-dist
+          path: harness-lock-dist
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: twine check
         run: |
           python -m pip install --upgrade twine packaging
-          ls -l dist hlock-dist
-          twine check dist/* hlock-dist/*
+          ls -l dist harness-lock-dist
+          twine check dist/* harness-lock-dist/*
       - name: Every expected artifact is present
         env:
           VERSION: ${{ needs.version.outputs.version }}
@@ -156,31 +157,36 @@ jobs:
           # PEP 440 normalizes pre-releases in filenames (0.2.0-rc.1 -> 0.2.0rc1).
           PY_VERSION=$(python -c "import os; from packaging.version import Version; print(Version(os.environ['VERSION']))")
           for pattern in \
-            "harness_lock-${PY_VERSION}.tar.gz" \
-            "harness_lock-${PY_VERSION}-*manylinux*x86_64*.whl" \
-            "harness_lock-${PY_VERSION}-*manylinux*aarch64*.whl" \
-            "harness_lock-${PY_VERSION}-*macosx*arm64*.whl" \
-            "harness_lock-${PY_VERSION}-*macosx*x86_64*.whl" \
-            "harness_lock-${PY_VERSION}-*win_amd64*.whl" \
-            "../hlock-dist/hlock-${PY_VERSION}.tar.gz" \
-            "../hlock-dist/hlock-${PY_VERSION}-py3-none-any.whl"; do
+            "hlock-${PY_VERSION}.tar.gz" \
+            "hlock-${PY_VERSION}-*manylinux*x86_64*.whl" \
+            "hlock-${PY_VERSION}-*manylinux*aarch64*.whl" \
+            "hlock-${PY_VERSION}-*macosx*arm64*.whl" \
+            "hlock-${PY_VERSION}-*macosx*x86_64*.whl" \
+            "hlock-${PY_VERSION}-*win_amd64*.whl" \
+            "../harness-lock-dist/harness_lock-${PY_VERSION}.tar.gz" \
+            "../harness-lock-dist/harness_lock-${PY_VERSION}-py3-none-any.whl"; do
             compgen -G "dist/$pattern" > /dev/null || { echo "::error::missing dist/$pattern"; exit 1; }
           done
       - name: Install both names and smoke-test them
         run: |
           set -euo pipefail
           python -m venv /tmp/venv
-          # `hlock` pins harness-lock==<same version>; resolve it from the local wheels.
-          /tmp/venv/bin/pip install --find-links dist --find-links hlock-dist hlock
+          # Install the local wheel files by path: `--find-links` would let pip pick an
+          # older same-version `harness-lock` from PyPI (the pre-rename package, which has
+          # no `hlock` module) over the local alias.
+          /tmp/venv/bin/pip install dist/hlock-*manylinux*x86_64*.whl harness-lock-dist/*.whl
           /tmp/venv/bin/hlock --version
+          /tmp/venv/bin/harness-lock --version
           /tmp/venv/bin/python -c "import harness_lock, hlock; assert hlock.__version__ == harness_lock.__version__; print(hlock.__version__)"
 
-  pypi:
-    name: Publish harness-lock to PyPI
+  # Job ids and environments are per PyPI project: `pypi-hlock` publishes hlock, `pypi`
+  # publishes harness-lock. Each must match that project's trusted publisher.
+  pypi-hlock:
+    name: Publish hlock to PyPI
     needs: [version, verify]
     if: github.event_name == 'push' || inputs.dry_run == false
     runs-on: ubuntu-latest
-    environment: pypi
+    environment: pypi-hlock
     permissions:
       id-token: write # PyPI trusted publishing — no API token needed
     steps:
@@ -195,17 +201,17 @@ jobs:
           # Re-running a release tag should be a no-op, not a hard failure.
           skip-existing: true
 
-  pypi-hlock:
-    name: Publish hlock to PyPI
-    needs: [pypi]
+  pypi:
+    name: Publish harness-lock to PyPI
+    needs: [pypi-hlock]
     runs-on: ubuntu-latest
-    environment: pypi-hlock
+    environment: pypi
     permissions:
       id-token: write # PyPI trusted publishing — no API token needed
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: hlock-dist
+          name: harness-lock-dist
           path: dist
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
@@ -214,7 +220,7 @@ jobs:
 
   release:
     name: GitHub release
-    needs: [pypi, pypi-hlock]
+    needs: [pypi-hlock, pypi]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:

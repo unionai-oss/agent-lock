@@ -37,10 +37,10 @@ jobs:
       - name: Unit tests
         run: uv run --no-sync pytest -q
       - name: Lint
-        run: uv run --no-sync ruff check harness_lock tests packaging/hlock
+        run: uv run --no-sync ruff check harness_lock hlock tests
 
   # Catches a broken release in review rather than at tag time: versions agree, the
-  # wheel, sdist, and hlock alias build, pass `twine check`, install, and run, and
+  # wheel, sdist, and harness-lock alias build, pass `twine check`, install, and run, and
   # all three crates package.
   packaging:
     name: Packaging (version, wheels, crates)
@@ -60,23 +60,26 @@ jobs:
         with:
           command: sdist
           args: --out dist
-      - name: Build the hlock alias package
+      - name: Build the harness-lock alias package
         run: |
           python -m pip install --upgrade build
-          python -m build packaging/hlock --outdir dist
+          python -m build packaging/harness-lock --outdir dist
       - name: twine check + install smoke test (both names)
         run: |
           set -euo pipefail
           python -m pip install --upgrade twine
           twine check dist/*
           python -m venv /tmp/venv
-          # `hlock` pins harness-lock==<same version>, resolved from the local wheel.
-          /tmp/venv/bin/pip install --find-links dist hlock
-          # Run outside the checkout so the source `harness_lock/` dir (which has no
-          # compiled extension) doesn't shadow the installed package.
+          # Install both local wheels by path (`harness-lock` pins hlock==<same version>).
+          # `--find-links` would let pip pick an older same-version `harness-lock` from
+          # PyPI (the pre-rename package, which has no `hlock` module) over the local alias.
+          /tmp/venv/bin/pip install dist/*.whl
+          # Run outside the checkout so the source `harness_lock/` and `hlock/` dirs (no
+          # compiled extension) don't shadow the installed packages.
           cd "$RUNNER_TEMP"
           /tmp/venv/bin/hlock --version
+          /tmp/venv/bin/harness-lock --version
           /tmp/venv/bin/python -c "import harness_lock, hlock; assert hlock.__version__ == harness_lock.__version__; print(hlock.__version__)"
       - uses: dtolnay/rust-toolchain@stable
-      - name: cargo publish --workspace --dry-run (harness-lock-core, harness-lock, hlock)
+      - name: cargo publish --workspace --dry-run (harness-lock-core, hlock, harness-lock)
         run: cargo publish --workspace --dry-run --locked
