@@ -10,12 +10,61 @@
   background-color: color-mix(in srgb, var(--md-primary-fg-color) 18%, transparent);
   border-bottom: 2px solid var(--md-primary-fg-color);
   color: var(--md-default-fg-color);
-  font-size: .68rem;
   font-weight: 700;
-  letter-spacing: .06em;
-  text-transform: uppercase;
 }
-.md-typeset table:not([class]) th code {
-  text-transform: none;
-  letter-spacing: normal;
+
+/* Footer: the logo's violet → pink gradient, drifting slowly like the animated logo. */
+.md-footer-meta {
+  --md-footer-fg-color: #fff;
+  --md-footer-fg-color--light: rgba(255, 255, 255, .92);
+  --md-footer-fg-color--lighter: rgba(255, 255, 255, .75);
+  --md-default-fg-color: #fff;
+  --md-default-fg-color--light: rgba(255, 255, 255, .92);
+  --md-typeset-a-color: #fff;
+  position: relative;
+  background-image: linear-gradient(120deg, #7c3aed, #a855f7, #ec4899, #8b5cf6, #7c3aed);
+  background-size: 300% 300%;
+  animation: hl-footer-drift 20s ease-in-out infinite;
+}
+[data-md-color-scheme="slate"] .md-footer-meta {
+  background-image: linear-gradient(120deg, #2e1065, #5b21b6, #9d174d, #4c1d95, #2e1065);
+}
+.md-footer-meta::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  opacity: .45;
+  background: linear-gradient(90deg, #a78bfa, #f472b6, #a78bfa);
+  background-size: 200% 100%;
+  animation: hl-footer-drift 8s linear infinite;
+}
+.md-footer-meta,
+.md-footer-meta .md-copyright,
+.md-footer-meta .md-copyright__highlight,
+.md-footer-meta .md-social__link {
+  color: rgba(255, 255, 255, .92);
+}
+.md-footer-meta.md-typeset a,
+.md-footer-meta .md-copyright a,
+.md-footer-meta .md-copyright a:hover {
+  color: #fff;
+  text-decoration: underline;
+  text-decoration-color: rgba(255, 255, 255, .5);
+}
+.md-footer-meta .md-social__link svg {
+  fill: rgba(255, 255, 255, .92);
+}
+.md-footer-meta .md-social__link:hover {
+  transform: translateY(-1px);
+}
+.md-footer-meta .md-social__link:hover svg {
+  fill: #fff;
+}
+@keyframes hl-footer-drift {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .md-footer-meta, .md-footer-meta::before { animation: none; }
 }
