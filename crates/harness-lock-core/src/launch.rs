@@ -313,7 +313,11 @@ pub fn prepare(lock: &Lockfile, lock_path: &Path, reg: &Registry, ctx: &Ctx, opt
     if same && opts.in_place {
         prep.notes.push("using your own config (no isolation)".into());
     } else {
-        let prefix = opts.prefix.clone().unwrap_or_else(|| PathBuf::from(ENV_DIR));
+        // each lock file gets its own environments, so two locks never share a root
+        let prefix = opts.prefix.clone().unwrap_or_else(|| match lock_path.file_stem().and_then(|s| s.to_str()) {
+            Some("harness") | None => PathBuf::from(ENV_DIR),
+            Some(stem) => PathBuf::from(ENV_DIR).join(stem),
+        });
         let sopts = SyncOptions { prefix: Some(prefix), ..Default::default() };
         let (t, _, iso) = sync::target_ctx(target, ctx, &sopts);
         let root = target.config_root(&t);

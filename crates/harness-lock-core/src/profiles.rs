@@ -232,6 +232,32 @@ pub struct LaunchSpec {
     pub model_flag: Option<String>,
 }
 
+/// How `hlock localize` points a harness at a local OpenAI-compatible endpoint:
+/// values to set (by JSON pointer) in one of the profile's files. Strings and keys
+/// may use `{provider}`, `{model}`, `{base_url}` and `{host}`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default, rename_all = "kebab-case")]
+pub struct LocalProvider {
+    pub file: String,
+    pub set: BTreeMap<String, serde_json::Value>,
+}
+
+/// A model `hlock localize` may pick for a runtime.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default, rename_all = "kebab-case")]
+pub struct CatalogModel {
+    pub id: String,
+    pub params_b: Option<f64>,
+    /// Memory the weights plus a working context need.
+    pub min_memory_gb: Option<f64>,
+    /// 3 strong agentic coder, 2 capable, 1 small/fast.
+    pub tier: u8,
+    /// Reliable tool calling.
+    pub tools: bool,
+    /// Roles it suits (empty: any).
+    pub roles: Vec<String>,
+}
+
 /// How hlock runs a code harness (a framework agent or a custom script).
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default, rename_all = "kebab-case")]
@@ -259,6 +285,12 @@ pub struct HarnessProfile {
     pub homepage: Option<String>,
     /// `full` (pin, sync and launch are tested) or `basic` (detect, version, MCP, skills).
     pub support: String,
+    /// Open-source license (for `hlock localize`, which prefers open harnesses).
+    pub open_source: Option<bool>,
+    /// Can use a local OpenAI- or Anthropic-compatible model endpoint.
+    pub local_models: Option<bool>,
+    /// How to configure a local model endpoint (`hlock localize`).
+    pub local_provider: Vec<LocalProvider>,
     /// Framework profile a custom harness builds on (`pydantic-ai`, `deepagents`, …).
     pub framework: Option<String>,
     /// Packages whose installed versions are pinned (`pypi:pydantic-ai`, `npm:…`).
@@ -312,6 +344,8 @@ pub struct RuntimeProfile {
     pub serve: Option<String>,
     pub models: RuntimeModels,
     pub install: Vec<InstallMethod>,
+    /// Models `hlock localize` may pick.
+    pub catalog: Vec<CatalogModel>,
     #[serde(skip_deserializing)]
     pub origin: String,
 }

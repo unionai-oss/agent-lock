@@ -311,6 +311,9 @@ pub struct Lockfile {
     pub kind: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub optimize: Option<serde_json::Value>,
+    /// What `hlock localize` replaced and how it chose (localized locks only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub localize: Option<serde_json::Value>,
 }
 
 impl Default for Lockfile {
@@ -339,6 +342,7 @@ impl Default for Lockfile {
             base_lock: None,
             kind: None,
             optimize: None,
+            localize: None,
         }
     }
 }

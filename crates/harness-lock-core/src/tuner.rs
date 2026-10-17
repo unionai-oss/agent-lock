@@ -175,6 +175,13 @@ impl Tuner {
 
     /// Tune: enumerate, run, aggregate, select, and write `harness.lock`.
     pub fn tune(&mut self) -> Result<Lockfile> {
+        let lock = self.tune_lock()?;
+        lock.save(std::path::Path::new(crate::LOCKFILE_PATH))?;
+        Ok(lock)
+    }
+
+    /// Tune and return the winning lock without writing it.
+    pub fn tune_lock(&mut self) -> Result<Lockfile> {
         let registry = Registry::load_for(&Ctx::from_process(), Some(&self.manifest))?;
         apply_target(&mut self.manifest, self.harness_override.as_deref(), &registry)?;
         self.code_harnesses = registry
@@ -232,7 +239,6 @@ impl Tuner {
         .ok_or_else(|| Error::Tuning("no viable stack found".into()))?;
 
         let lock = self.build_resolve(&winner, &scores);
-        lock.save(std::path::Path::new(crate::LOCKFILE_PATH))?;
         let _ = self.write_report(&lock, &scores);
         Ok(lock)
     }

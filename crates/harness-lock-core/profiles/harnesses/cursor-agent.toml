@@ -6,6 +6,8 @@ aliases = ["cursor", "cursor-cli"]
 vendor = "Anysphere"
 homepage = "https://cursor.com/cli"
 support = "full"
+open-source = false
+local-models = false
 binaries = ["cursor-agent", "agent"]
 version = { args = ["--version"] }
 active-env = ["CURSOR_AGENT", "CURSOR_AGENT_CHAT_ID"]

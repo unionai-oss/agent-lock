@@ -20,3 +20,36 @@ package = "lm-studio"
 method = "app"
 path-hints = ["/LM Studio.app/", "/.lmstudio/bin/", "/.cache/lm-studio/bin/"]
 command = "Download LM Studio from https://lmstudio.ai, then run: npx lmstudio install-cli"
+
+# Models `hlock localize` may pick (LM Studio model keys). Extend with your own.
+[[catalog]]
+id = "openai/gpt-oss-120b"
+params-b = 117
+min-memory-gb = 72
+tier = 3
+tools = true
+[[catalog]]
+id = "qwen/qwen3-coder-30b"
+params-b = 30
+min-memory-gb = 24
+tier = 3
+tools = true
+[[catalog]]
+id = "openai/gpt-oss-20b"
+params-b = 21
+min-memory-gb = 16
+tier = 2
+tools = true
+[[catalog]]
+id = "qwen/qwen3-8b"
+params-b = 8
+min-memory-gb = 8
+tier = 1
+tools = true
+[[catalog]]
+id = "qwen/qwen3-1.7b"
+params-b = 1.7
+min-memory-gb = 3
+tier = 1
+tools = true
+roles = ["small", "decision"]

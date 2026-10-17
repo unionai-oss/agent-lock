@@ -40,6 +40,7 @@ from harness_lock import (
     sync_skill,
 )
 from harness_lock import check_pin as _check_pin
+from harness_lock import localize as _localize
 from harness_lock import optimize as al_optimize
 from harness_lock import pin as _pin
 from harness_lock import resolve as _resolve
@@ -77,7 +78,7 @@ click.rich_click.COMMAND_GROUPS = {
         {"name": "Rehydrate", "commands": ["sync", "launch"]},
         {"name": "Harness", "commands": ["harness", "runtime"]},
         {"name": "Inspect", "commands": ["show", "tree", "backend"]},
-        {"name": "Run & evolve", "commands": ["run", "upgrade", "optimize"]},
+        {"name": "Run & evolve", "commands": ["run", "upgrade", "optimize", "localize"]},
     ]
 }
 
@@ -1009,6 +1010,70 @@ def _manifest_target() -> str | None:
         return Manifest.load(MANIFEST).target_harness
     except ValueError:
         return None
+
+
+@main.command()
+@click.argument("lock", default=LOCK, required=False)
+@click.option("-o", "--out", default="harness.local.lock", show_default=True, help="Where to write the localized lock.")
+@click.option("--harness", default=None, help="Local harness to use. [dim]\\[default: the lock's if local-capable, else the best installed][/]")
+@click.option("--runtime", default=None, help="Inference runtime (ollama, lmstudio, llama-cpp, …). [dim]\\[default: the best installed][/]")
+@click.option("--models", default=None, help="Comma-separated model ids to consider instead of the runtime's catalog.")
+@click.option("--memory-gb", type=float, default=None, help="Memory budget for model weights. [dim]\\[default: measured][/]")
+@click.option("--tasks", default=None, help="Task pack to evaluate candidates on. [dim]\\[default: harness.toml's, if any][/]")
+@click.option("--strict", is_flag=True, help="Drop remote MCP servers instead of flagging them.")
+@click.option("--allow-network", is_flag=True, help="Keep self-hosted runtimes on your network instead of replacing them.")
+@click.option("--json", "as_json", is_flag=True, help="Print the localize report as JSON.")
+def localize(lock: str, out: str, harness: str | None, runtime: str | None, models: str | None,
+             memory_gb: float | None, tasks: str | None, strict: bool, allow_network: bool, as_json: bool) -> None:
+    """Write an all-local equivalent of a lock to [path]harness.local.lock[/].
+
+    A proprietary harness, or one that can't use a local model, becomes a local-capable
+    one; models on API providers move to a local runtime, picked from its catalog and the
+    weights on disk to fit this machine's memory. MCP servers, skills and instructions carry
+    over. With task packs, candidates are evaluated; otherwise they're ranked.
+    """
+    model_list = [m.strip() for m in models.split(",")] if models else []
+    with _working("Localizing…"):
+        result = json.loads(_localize(lock, out, harness=harness, runtime=runtime, models=model_list,
+                                      memory_gb=memory_gb, tasks=tasks, strict=strict, allow_network=allow_network))
+    rep = result["report"]
+    if as_json:
+        console.print_json(data=rep)
+        return
+    _ok(f"wrote [path]{out}[/]  [muted](from {lock})[/]")
+    t = _kv_table()
+    h = rep["harness"]
+    inst = "" if h["installed"] else "  [warn]not installed[/]"
+    t.add_row("harness", f"[bold]{h['to']}[/]{inst}  [muted]{h['why']}[/]")
+    rt = rep["runtime"]
+    rinst = f"[bold]{rt['name']}[/] {rt.get('version') or ''}" + ("" if rt["installed"] else "  [warn]not installed[/]")
+    t.add_row("runtime", f"{rinst}  [muted]{rt['endpoint']}[/]")
+    for llm in result["lock"]["llm"]:
+        t.add_row(f"llm · {llm['role']}", f"[bold]{llm['provider']}:{llm['model']}[/]")
+    mem = rep.get("memory")
+    if mem:
+        t.add_row("memory", f"{mem['usable-gb']} GB for weights  [muted]({mem['total-gb']} GB, {mem['how']})[/]")
+    cands = rep["models"]["candidates"]
+    if cands:
+        shown = ", ".join(f"{c['id']}{' ✓' if c['present'] else ''}" for c in cands[:6])
+        t.add_row("candidates", f"{shown}  [muted](✓ on disk)[/]")
+    if rep["evaluated"]:
+        ev = result["lock"]["evidence"]
+        base = rep["baseline"]
+        sr = (ev.get("success-rate") or {}).get("mean")
+        line = f"success rate {_pct(sr)}"
+        if base.get("success-rate") is not None:
+            line += f"  [muted](source lock: {_pct(base['success-rate'])})[/]"
+        t.add_row("evidence", line)
+    else:
+        t.add_row("evidence", "[muted]not evaluated (no task packs); ranked by fit, tier, and what's on disk[/]")
+    console.print(Panel(t, title=f"[brand]🏠 {out} · localized[/]", title_align="left", border_style="magenta",
+                        expand=False, padding=(1, 2)))
+    for line in rep["replaced"]:
+        console.print(f"  [ok]~[/] {line}")
+    for line in rep["notes"]:
+        console.print(f"  [warn]![/] {line}")
+    _next(f"hlock sync {out} --pull", f"hlock launch --lock {out}")
 
 
 @main.group()

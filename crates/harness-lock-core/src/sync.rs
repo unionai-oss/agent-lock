@@ -470,8 +470,9 @@ pub fn plan(lock: &Lockfile, lock_path: &Path, reg: &Registry, ctx: &Ctx, opts: 
             (None, _) => false,
         };
         let what = if c.pointers.is_empty() { display.clone() } else { format!("{} {}", display, c.pointers.join(",")) };
+        let step_id = if c.pointers.is_empty() { format!("config:{}", c.id) } else { format!("config:{}#{}", c.id, c.pointers.join(",")) };
         steps.push(Step {
-            id: format!("config:{}", c.id),
+            id: step_id,
             kind: "config".into(),
             title: if same { what } else if actual.is_some() { format!("Update {what}") } else { format!("Write {what}") },
             status: if same { "satisfied" } else { "auto" }.into(),
@@ -833,7 +834,7 @@ pub fn run_step(step: &Step, ctx: &Ctx) -> Result<String> {
     match action {
         Action::WriteConfig { path, vendored, format, pointers, fallback } => {
             let (desired, missing) = desired_config(vendored, format, pointers, path, fallback.as_deref(), &ctx.env)?;
-            let fmt = if format == "jsonc" || !pointers.is_empty() { "json" } else { format.as_str() };
+            let fmt = if format == "jsonc" { "json" } else { format.as_str() };
             let text = render_config(&desired, fmt).map_err(Error::Profile)?;
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent)?;

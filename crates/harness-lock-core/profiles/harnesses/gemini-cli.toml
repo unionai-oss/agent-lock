@@ -6,6 +6,8 @@ aliases = ["gemini"]
 vendor = "Google"
 homepage = "https://github.com/google-gemini/gemini-cli"
 support = "basic"
+open-source = true
+local-models = false
 binaries = ["gemini"]
 version = { args = ["--version"] }
 active-env = ["GEMINI_CLI"]
