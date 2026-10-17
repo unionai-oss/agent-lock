@@ -1,131 +1,176 @@
-# harness-lock (hlock)
+<div align="center">
 
-**Lock your agent into place.**
+# 🔒 hlock
+
+### Lock your agent into place.
+
+**Tune your agent stack against your own tasks, then pin the winner in a `harness.lock`.**
+
+[![PyPI](https://img.shields.io/pypi/v/hlock?label=pypi&color=3775A9&logo=pypi&logoColor=white)](https://pypi.org/project/hlock/)
+[![crates.io](https://img.shields.io/crates/v/hlock?color=E6532D&logo=rust&logoColor=white)](https://crates.io/crates/hlock)
+[![CI](https://img.shields.io/github/actions/workflow/status/unionai-oss/harness-lock/ci.yml?branch=main&label=ci&logo=github)](https://github.com/unionai-oss/harness-lock/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-unionai--oss.github.io-7C3AED?logo=readthedocs&logoColor=white)](https://unionai-oss.github.io/harness-lock/)
+[![Python](https://img.shields.io/pypi/pyversions/harness-lock?logo=python&logoColor=white)](https://pypi.org/project/hlock/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/unionai-oss/harness-lock/blob/main/LICENSE)
+
+[**Documentation**](https://unionai-oss.github.io/harness-lock/) ·
+[Quickstart](https://unionai-oss.github.io/harness-lock/getting-started/quickstart/) ·
+[CLI reference](https://unionai-oss.github.io/harness-lock/reference/cli/) ·
+[Design spec](https://github.com/unionai-oss/harness-lock/blob/main/SPEC.md)
+
+</div>
+
+---
 
 `hlock` treats an agent system the way a package manager treats dependencies. You
-bring your domain tasks, the models you're allowed to use, and the harness you
-like. `hlock` searches the stack, measures it, and writes a `harness.lock`: a pinned,
-version-controlled, enforceable description of the agent that actually works for
-your domain.
+bring your domain tasks, the models you're allowed to use, and the harness you like.
+`hlock` searches the stack, measures every candidate against your tasks, and writes a
+`harness.lock`: a pinned, version-controlled, enforceable description of the agent that
+actually works for your domain, along with the evidence for choosing it.
 
-| Package manager            | hlock                                                            |
-|----------------------------|----------------------------------------------------------------|
-| `pyproject.toml`           | `harness.toml` — the **manifest**: what you allow and require |
-| dependency resolver        | **tuner**: search over LLMs × decision models × harnesses × policies |
-| `uv.lock`                  | `harness.lock` — the **lockfile**: what was chosen, pinned, hashed, plus the evidence |
-| CI `--locked` check        | `hlock check` — fail if the running stack drifts from the lock |
-
-See `SPEC.md` for the full design (manifest, lockfile schema, component model,
-task packs, search strategies, the Flyte backend, open-weights models).
-The (superseded) reference pure-Python implementation is preserved under
-`python-legacy/`.
-
-## Architecture
-
-```
-            Python API/CLI  (import harness_lock as hlock, `hlock` command)     <- PyO3 bindings
-                         │
-                         ▼
-                  harness-lock-core (Rust)     manifest · lockfile · store ·
-                                           task packs · search · tuner
-                         │  │
-         local (reference)│  └── devbox / cluster: Python worker
-                         ▼        (harness_lock.tasks.worker)
-                in-process                │  └── optional Flyte raise
-                                          ▼       (flyte plugins-rs)
-                                    real LLM · data · finetune
-```
-
-- `crates/harness-lock-core` — the core library (pure Rust, no Python). It stays the
-  orchestrator + aggregator; it never does heavy compute itself.
-- `crates/harness-lock` — PyO3 extension (`harness_lock._harness_lock`) exposing the same user-facing
-  Python API as the reference implementation via the `harness_lock` package.
-- `harness_lock/` — the mixed Python package: re-exports the compiled `harness_lock._harness_lock`,
-  the `hlock` CLI, and the heavy-work Python worker (`harness_lock/tasks/worker.py`).
-- `crates/harness-lock-core/src/worker.rs` — the Rust↔Python bridge: a `PythonAdapter`
-  (behind the `HarnessAdapter` trait) that shells trials out to the worker over a
-  versioned JSON contract. See [Backends](#backends).
-- `crates/harness-lock-core/src/flyte.rs` — provisional [flyte-sdk-rs](https://github.com/flyteorg/flyte-sdk-rs)
-  integration behind the `flyte` cargo feature (not yet validated).
-
-The **Rust vs Python split** for `hlock optimize`: pure/deterministic logic — manifests,
-lockfiles, search planning, trial bookkeeping, evidence aggregation, lock construction —
-lives in Rust. Ecosystem- and GPU-heavy work — real LLM calls, user-trace loading
-(pandas/polars), synthetic data, model grading, prompt search, LoRA fine-tuning — lives in
-the Python worker, which runs where the Python toolchain does (devbox / `flyte local` /
-cluster) and may itself raise each body to a real Flyte task. The Rust core only ever
-speaks the JSON contract, so it never depends on where the work ran.
+| You know this from package managers | In `hlock` |
+|---|---|
+| 📄 `pyproject.toml` | **`harness.toml`**, the manifest: what the tuner may try, and what "best" means |
+| 🧮 dependency resolver | **the tuner**: search over LLMs × decision models × harnesses × policies |
+| 🔒 `uv.lock` / `Cargo.lock` | **`harness.lock`**, the lockfile: what was chosen, pinned and hashed, plus the evidence |
+| ✅ CI `--locked` check | **`hlock check`**: fail when the manifest drifts from the lock |
 
 ## Install
 
-From the Rust side you depend on the crate; from Python you get native bindings.
-
 ```bash
-# Python bindings — pip / uv / uvx
-pip install harness-lock          # or: uv add / uvx
-uv pip install -e .                            # editable dev install (this repo)
-
-# Rust crate(s)  (publish later; locally)
-cargo add harness-lock --path crates/harness-lock
-# core library, if you depend on it directly
-cargo add harness-lock-core --path crates/harness-lock-core
+pip install hlock        # or: uv add hlock  ·  uvx hlock --help
 ```
 
-A local editable build needs a Rust toolchain + a Python ≤3.13 interpreter:
+Prebuilt wheels cover Linux (x86_64, aarch64), macOS (arm64, x86_64), and Windows (x64)
+for CPython 3.9+. For Rust, use `cargo add hlock`.
 
-```bash
-python3.13 -m venv .venv && .venv/bin/pip install click pytest
-maturin develop -m crates/harness-lock/Cargo.toml      # builds + installs the hlock wheel
-```
+> [!NOTE]
+> `hlock` is the short name for [`harness-lock`](https://pypi.org/project/harness-lock/).
+> Both names install the same package at the same version, so `import hlock` and
+> `import harness_lock` are the same API.
 
-## Quickstart (local, no accounts)
+## Quickstart
+
+No accounts or API keys needed. The built-in `reference` provider and harness are
+deterministic and offline, so the whole loop runs on a laptop.
 
 ```bash
 hlock init --name demo --pack ./tasks   # write a starter harness.toml
-hlock resolve                              # tune the search space -> harness.lock + report
-hlock show                              # pretty-print the locked stack + evidence
-hlock check                             # static verification (CI-friendly exit code)
-hlock tree                              # component dependency graph
-hlock run "solve this task"             # run the locked agent with the runtime guard
-hlock backend status                    # report the active backend / Flyte config
+hlock resolve                           # tune the search space -> harness.lock
+hlock check                             # fail if harness.toml drifted from the lock
+hlock run "clean ./data/orders.csv"     # run the locked agent
 ```
 
-The built-in `reference` provider and harness are deterministic and offline, so the
-whole loop runs with zero setup and no API keys.
+<p align="center">
+  <img src="https://raw.githubusercontent.com/unionai-oss/harness-lock/main/docs/assets/quickstart.svg" alt="An hlock session: init, resolve, check, and run" width="640">
+</p>
 
-## Python API (Layer 1)
+From there: `hlock show` prints the locked stack and its evidence, `hlock tree` prints the
+component graph, `hlock upgrade` plans model upgrades, and `hlock optimize` tunes prompts,
+hyperparameters, and small models into a `harness.opt.lock`.
+
+<details>
+<summary><b>Python API</b></summary>
 
 ```python
-import harness_lock as hlock
-from harness_lock import SearchSpace, Objective, Budget
+import json
+import hlock
+from hlock import SearchSpace, Objective, Budget
 
 space = SearchSpace(
     llm={"planner": ["reference:qwen-7b", "reference:qwen-32b"]},
     decision=["none", "rules:default"],
     harness=["reference"],
-    tasks='{"packs": ["./tasks"], "seeds": 2}',
+    objective=Objective(select="min-cost", constraints={"success-rate": ">=0.5"}),
+    budget=Budget(max_trials=50),
+    tasks=json.dumps({"packs": ["./tasks"], "seeds": 2}),
 )
-lock = harness.lock(space, backend="local", workdir=".harnesslock")
+lock = hlock.resolve(space, backend="local")   # writes ./harness.lock
 print(lock.summary())
 
 agent = hlock.load("harness.lock")
-print(agent.run("clean ./data/orders.csv"))
+print(agent.run("clean ./data/orders.csv"))   # {"success": true, "model": "qwen-7b", ...}
 ```
+
+</details>
+
+## How it works
+
+```mermaid
+flowchart LR
+    subgraph inputs["You declare"]
+        direction TB
+        M["📄 harness.toml<br/><sub>candidates · objective · budget</sub>"]
+        T["🧪 task packs<br/><sub>prompts · fixtures · graders</sub>"]
+    end
+
+    subgraph tuner["hlock resolve"]
+        direction TB
+        S["search<br/><sub>LLMs × decision × harness × policy</sub>"]
+        E["evaluate<br/><sub>run every trial on your tasks</sub>"]
+        P["select<br/><sub>Pareto front + constraints</sub>"]
+        S --> E --> P
+    end
+
+    L["🔒 harness.lock<br/><sub>pinned · hashed · with evidence</sub>"]
+
+    subgraph use["You ship"]
+        direction TB
+        C["✅ hlock check<br/><sub>CI drift gate</sub>"]
+        R["▶️ hlock run<br/><sub>the pinned stack</sub>"]
+    end
+
+    M --> S
+    T --> E
+    P --> L
+    L --> C
+    L --> R
+```
+
+## Architecture
+
+A Rust core does all the deterministic work. Anything that needs the Python ML
+ecosystem or a GPU runs in a Python worker, which can lift each piece of work to a
+Flyte task on a cluster.
+
+```mermaid
+flowchart TB
+    subgraph py["🐍 Python  ·  pip install hlock"]
+        direction LR
+        CLI["hlock CLI"]
+        API["import hlock"]
+    end
+
+    subgraph core["🦀 harness-lock-core  ·  Rust"]
+        direction LR
+        MF["manifest"] ~~~ LK["lockfile"] ~~~ ST["store"] ~~~ TP["task packs"] ~~~ SR["search"] ~~~ TU["tuner"]
+    end
+
+    py -- "PyO3 bindings" --> core
+
+    core -- "backend = local" --> LOCAL["⚡ in-process reference harness<br/><sub>deterministic · offline · CI-friendly</sub>"]
+    core -- "backend = devbox / cluster<br/><sub>versioned JSON contract</sub>" --> W["🐍 Python worker<br/><sub>harness_lock.tasks.worker</sub>"]
+
+    W --> HEAVY["real LLM calls · trace loading · synthetic data<br/>grading · prompt search · LoRA fine-tuning"]
+    W -. "optional" .-> FLYTE["☁️ Flyte / Union tasks<br/><sub>CPU + GPU images · caching · lineage</sub>"]
+```
+
+| Path | What lives there |
+|---|---|
+| [`crates/harness-lock-core`](https://github.com/unionai-oss/harness-lock/tree/main/crates/harness-lock-core) | The core library (pure Rust): manifests, lockfiles, search planning, trial bookkeeping, evidence, lock construction. It orchestrates and aggregates, and never does heavy compute itself. |
+| [`crates/harness-lock-py`](https://github.com/unionai-oss/harness-lock/tree/main/crates/harness-lock-py) | PyO3 bindings, compiled into `harness_lock._harness_lock` and shipped only inside the wheel. |
+| [`crates/harness-lock`](https://github.com/unionai-oss/harness-lock/tree/main/crates/harness-lock), [`crates/hlock`](https://github.com/unionai-oss/harness-lock/tree/main/crates/hlock) | Thin crates that re-export the core under both names. |
+| [`harness_lock/`](https://github.com/unionai-oss/harness-lock/tree/main/harness_lock) | The Python package: the `hlock` CLI and the heavy-work worker ([`tasks/worker.py`](https://github.com/unionai-oss/harness-lock/blob/main/harness_lock/tasks/worker.py)). |
+| [`packaging/hlock`](https://github.com/unionai-oss/harness-lock/tree/main/packaging/hlock) | The `hlock` PyPI alias, which pins the matching `harness-lock` release. |
+| [`docs/`](https://github.com/unionai-oss/harness-lock/tree/main/docs) | The documentation site ([Zensical](https://zensical.org)), published to GitHub Pages. |
 
 ## Backends
 
-- `local` — in-process Rust reference harness (default; deterministic, offline, CI-friendly).
-- `devbox` / `cluster` — the Rust core drives the **Python worker**
-  (`python -m harness_lock.tasks.worker`) over a versioned JSON contract. The worker runs
-  each heavy work item where the Python toolchain and GPUs live, and best-effort raises it
-  to a real Flyte task via the Python `flyte` / `flyteplugins-rs` packages
-  (`~/.flyte/config.yaml`). When the optional deps are absent it degrades gracefully
-  (deterministic LLM fallback, in-process Flyte lift, availability flags).
-
-Select the backend with `--backend local|devbox|cluster` (or `hlock resolve --backend …`), which
-overrides the manifest's `[backend] target`. The interpreter the worker runs under is
-taken from `$HL_PYTHON` (default `python3`) — pin it to the interpreter that has
-`harness-lock` installed.
+| Backend | Where trials run | Use it for |
+|---|---|---|
+| `local` *(default)* | in-process Rust reference harness | trying it out, CI, deterministic tests |
+| `devbox` | Python worker on this machine | real LLM calls, your own traces, `flyte local` |
+| `cluster` | Python worker that lifts each stage to Flyte/Union | GPUs, fan-out, durable caching, shared results |
 
 ```bash
 hlock optimize --backend devbox --depth probe --max-trials 10
@@ -133,37 +178,33 @@ hlock optimize --backend devbox --depth probe --max-trials 10
 hlock optimize --backend cluster --depth ft --data user:./runs   # LoRA on a GPU worker
 ```
 
+See [Backends](https://unionai-oss.github.io/harness-lock/guides/backends/) for setup and
+the `HL_*` environment variables.
+
 ## Development
 
 ```bash
-cargo test -p harness-lock-core            # Rust core + integration tests
-.venv/bin/python -m pytest tests  # Python bindings tests
-ruff check hlock/tests              # lint the Python layer
+python3.13 -m venv .venv && source .venv/bin/activate
+pip install maturin click pytest ruff
+maturin develop -m crates/harness-lock-py/Cargo.toml   # build + install the extension
+
+cargo test -p harness-lock-core    # Rust core + integration tests
+python -m pytest tests             # Python bindings + worker
+ruff check harness_lock tests packaging/hlock
+
+pip install -r docs/requirements.txt && zensical serve   # docs at http://localhost:8000
 ```
 
-## Release & publishing
-
-CI/CD publishes on git tags `v*` (and via `workflow_dispatch`):
-
-- **Python bindings** → PyPI as `harness-lock` (`.github/workflows/publish-python.yml`).
-  `maturin` builds an **abi3** wheel (CPython ≥ 3.9) for Linux/macOS/Windows and a source dist.
-  Publishing uses [trusted publishing](https://docs.pypi.org/trusted-publishers/) (OIDC) —
-  register this GitHub repo as a PyPI publisher for the `pypi` environment — or set a token.
-  For test-PyPI publishes, run the workflow with `--pypi test` and set `TEST_PYPI_TOKEN`.
-- **Rust crates** → crates.io as `harness-lock-core` (dependency) then
-  `harness-lock` (`.github/workflows/publish-cargo.yml`).
-  Set the `CARGO_REGISTRY_TOKEN` secret.
-
-Daily CI (`ci.yml`) runs `cargo test` for the core and `pytest` + `ruff` for the bindings on
-Python 3.9/3.12/3.13.
-
-```bash
-git tag v0.1.0 && git push origin v0.1.0   # triggers both publishing workflows
-```
+Releases are cut from tags. See [RELEASING.md](https://github.com/unionai-oss/harness-lock/blob/main/RELEASING.md).
 
 ## Status
 
-Early v0.1 (Rust core): manifest + lockfile schema v1, content-addressed store,
-task packs with graders, reference provider/harness, grid search + Pareto
-selection, a working `init / lock / show / check / tree / run / backend` CLI via
-PyO3 bindings, and installable via pip/uv (crate not yet published).
+`hlock` is at **v0.1**. What works today: manifest and lockfile schema v1, a
+content-addressed store, task packs with graders, the reference provider and harness,
+grid search with Pareto selection, `upgrade` (plan/apply/rollback), and `optimize` across
+the `local`, `devbox`, and `cluster` backends. [SPEC.md](https://github.com/unionai-oss/harness-lock/blob/main/SPEC.md) describes the full design,
+much of which is still on the roadmap.
+
+## License
+
+[Apache-2.0](https://github.com/unionai-oss/harness-lock/blob/main/LICENSE)

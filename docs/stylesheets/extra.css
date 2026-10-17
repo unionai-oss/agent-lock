@@ -1,0 +1,6 @@
+/* Home page feature cards: a balanced 2 x 2 grid on wide screens. */
+@media screen and (min-width: 60em) {
+  .md-typeset .grid.cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

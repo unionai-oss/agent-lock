@@ -1,17 +1,35 @@
-# hlock
+# 🔒 hlock
 
-`hlock` is the short name for [`harness-lock`](https://pypi.org/project/harness-lock/):
-lock your agent into place.
+**Lock your agent into place.** Tune your agent stack against your own tasks, then pin
+the winner in a `harness.lock`.
 
 ```bash
-pip install hlock          # same as: pip install harness-lock
-hlock --help
+pip install hlock
 ```
+
+```bash
+hlock init --name demo --pack ./tasks   # write a starter harness.toml
+hlock resolve                           # tune the search space -> harness.lock
+hlock check                             # fail if harness.toml drifted from the lock
+hlock run "clean ./data/orders.csv"     # run the locked agent
+```
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/unionai-oss/harness-lock/main/docs/assets/quickstart.svg" alt="An hlock session: init, resolve, check, and run" width="640">
+</p>
 
 ```python
-import hlock               # same API as: import harness_lock
+import hlock
+
+lock = hlock.resolve("harness.toml")
+print(lock.summary())
 ```
 
-This package has no code of its own. Each `hlock` release pins the identical
-`harness-lock` release, so the two names always install the same thing.
-Documentation and source: <https://github.com/unionai-oss/harness-lock>.
+`hlock` is the short name for [`harness-lock`](https://pypi.org/project/harness-lock/).
+This package has no code of its own: each `hlock` release pins the identical
+`harness-lock` release, so both names install the same thing, and `import hlock` is
+the same API as `import harness_lock`.
+
+- 📖 **Docs:** <https://unionai-oss.github.io/harness-lock/>
+- 💻 **Source:** <https://github.com/unionai-oss/harness-lock>
+- 🦀 **Rust:** `cargo add hlock`

@@ -1,0 +1,161 @@
+# Python API
+
+```python
+import hlock          # identical to: import harness_lock
+```
+
+The Python API and the CLI are built on the same Rust bindings, so anything the CLI does
+you can do from Python. Dict-shaped results (evidence, outcomes, reports) are returned
+as JSON strings. Parse them with `json.loads`.
+
+## Example
+
+```python
+import json
+import hlock
+from hlock import SearchSpace, Objective, Budget
+
+space = SearchSpace(
+    llm={"planner": ["reference:qwen-7b", "reference:qwen-32b"]},
+    decision=["none", "rules:default"],
+    harness=["reference"],
+    objective=Objective(select="min-cost", constraints={"success-rate": ">=0.5"}),
+    budget=Budget(max_trials=50),
+    tasks=json.dumps({"packs": ["./tasks"], "seeds": 2}),
+)
+
+lock = hlock.resolve(space, backend="local")     # also writes ./harness.lock
+print(lock.summary())
+# stack="agent" harness=reference llm=qwen-7b decision=none success-rate=1.00 trials=2
+
+evidence = json.loads(lock.evidence)
+print(evidence["success_rate"]["mean"], evidence["cost_usd_per_task"]["mean"])
+
+agent = hlock.load("harness.lock")
+outcome = json.loads(agent.run("clean ./data/orders.csv"))
+print(outcome)   # {'cost_usd': 0.0001, 'model': 'qwen-7b', 'success': True}
+```
+
+## Functions
+
+### `resolve(manifest=None, backend=None, workdir=None) -> Lockfile`
+
+Run the tuner and write `harness.lock` in the current directory.
+
+| Parameter | Description |
+|---|---|
+| `manifest` | A `Manifest`, a `SearchSpace`, a path to a TOML file, or TOML text. Defaults to `./harness.toml`. |
+| `backend` | `"local"`, `"devbox"`, or `"cluster"`. Overrides the manifest. |
+| `workdir` | Where trial artifacts go. Defaults to `.harnesslock`. |
+
+### `load(path) -> LockedAgent`
+
+Load a lockfile as a runnable agent.
+
+### `upgrade(manifest=None, to=None, all=False, apply=False, rollback=False, force=False, workdir=None) -> str`
+
+Plan, apply, or roll back upgrades, like [`hlock upgrade`](cli.md#upgrade). Returns JSON:
+
+```json
+{
+  "plan": {"upgradeable": [{"role": "planner", "from": "qwen-7b", "to": "qwen-32b"}]},
+  "applied": false, "rolled_back": false,
+  "before": 1.0, "after": null,
+  "message": "plan: 1 upgrade(s) available — rerun with --apply to perform.",
+  "lock_path": "/path/to/harness.lock"
+}
+```
+
+### `optimize(manifest=None, depth="auto", data="user", harness=None, out=None, strict=False, apply=False, max_trials=None, backend=None, workdir=None) -> str`
+
+Run the optimizer, like [`hlock optimize`](cli.md#optimize). Returns JSON with `path`
+(the opt-lock written), `summary`, and a `report` with `depth`, `backend`, `data_mode`,
+`grid`, `best`, `baseline_success_rate`, and `gain_success_rate`.
+
+## Classes
+
+### `SearchSpace`
+
+A search space built in code instead of a `harness.toml`.
+
+```python
+SearchSpace(llm=None, decision=None, harness=None, policy=None, tools=None,
+            skills=None, objective=None, budget=None, tasks=None)
+```
+
+| Parameter | Type | Description |
+|---|---|---|
+| `llm` | `dict[str, list[str]]` | Candidate models per role, as `"provider:model"` |
+| `decision` | `list[str]` | Candidate decision models |
+| `harness` | `list[str]` | Candidate harnesses |
+| `objective` | `Objective` | What "best" means |
+| `budget` | `Budget` | How much to search |
+| `tasks` | `str` (JSON) | `{"packs": [...], "seeds": n}`. Defaults to `{"seeds": 2}`. |
+| `policy`, `tools`, `skills` | `str` (JSON) | Matching manifest sections |
+
+`SearchSpace.to_manifest(name)` returns the equivalent `Manifest`. A lock resolved from
+a `SearchSpace` gets the stack name `"agent"`.
+
+### `Objective`
+
+```python
+Objective(primary="success-rate", select="min-cost", constraints=None)
+```
+
+| Parameter | Description |
+|---|---|
+| `primary` | The metric being optimized |
+| `select` | `"min-cost"` or `"max-quality"` |
+| `constraints` | `dict[str, str]`, e.g. `{"success-rate": ">=0.8", "cost-usd-per-task": "<=0.05"}` |
+
+### `Budget`
+
+```python
+Budget(max_spend_usd=None, max_trials=None, strategy="grid", random_seed=0)
+```
+
+### `Manifest`
+
+| Member | Description |
+|---|---|
+| `Manifest.load(path)` | Parse a `harness.toml` |
+| `Manifest.from_str(text)` | Parse TOML text |
+| `.name` | Project name |
+| `.backend` | Configured backend target |
+| `.manifest_hash()` | `"sha256:…"` hash, as recorded in the lock |
+| `.task_packs()` | List of task pack paths |
+| `.to_json()` | The manifest as JSON |
+
+### `Lockfile`
+
+| Member | Description |
+|---|---|
+| `Lockfile.load(path)` | Read a `harness.lock` or `harness.opt.lock` |
+| `.summary()` | One-line summary |
+| `.harness` | Locked harness name |
+| `.decision` | Locked decision model |
+| `.llm` | JSON list of `[role, "provider:model"]` pairs |
+| `.evidence` | JSON: `trials`, `success_rate`, `cost_usd_per_task`, `latency_s_per_task` |
+| `.provenance` | The backend that produced the lock |
+| `.manifest_hash` | The manifest hash the lock was resolved from, or `None` |
+| `.to_json()` | The whole lockfile as JSON |
+
+### `LockedAgent`
+
+| Member | Description |
+|---|---|
+| `.summary()` | One-line summary of the locked stack |
+| `.run(prompt)` | Run the locked stack. Returns JSON: `success`, `model`, `cost_usd`. In v0.1 this uses the offline reference provider. |
+
+## Constants
+
+| Name | Description |
+|---|---|
+| `__version__` | Package version |
+| `LOCK_VERSION` | Lockfile schema version this release reads and writes (`1`) |
+
+## Errors
+
+Invalid input and failed operations raise `ValueError` with a message prefixed by the
+error kind: `manifest error:`, `lockfile error:`, `task pack error:`, `tuning error:`,
+`python worker error:`, and so on.
