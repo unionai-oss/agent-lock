@@ -10,13 +10,13 @@ dynamic = ["version"]
 description = "Lock your agent into place — tune your agent stack and pin it (Rust core + Python bindings)."
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 authors = [{ name = "Niels Bantilan", email = "niels.bantilan@gmail.com" }]
 keywords = ["agents", "evaluation", "llm", "lockfile", "tuning", "rust", "flyte"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Rust",
-    "License :: OSI Approved :: Apache Software License",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
