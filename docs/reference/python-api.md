@@ -38,7 +38,11 @@ print(outcome)   # {'cost_usd': 0.0001, 'model': 'qwen-7b', 'success': True}
 
 ## Functions
 
-### `resolve(manifest=None, backend=None, workdir=None) -> Lockfile`
+### `resolve`
+
+```python
+resolve(manifest=None, backend=None, workdir=None) -> Lockfile
+```
 
 Run the tuner and write `harness.lock` in the current directory.
 
@@ -48,11 +52,22 @@ Run the tuner and write `harness.lock` in the current directory.
 | `backend` | `"local"`, `"devbox"`, or `"cluster"`. Overrides the manifest. |
 | `workdir` | Where trial artifacts go. Defaults to `.harnesslock`. |
 
-### `load(path) -> LockedAgent`
+### `load`
+
+```python
+load(path) -> LockedAgent
+```
 
 Load a lockfile as a runnable agent.
 
-### `upgrade(manifest=None, to=None, all=False, apply=False, rollback=False, force=False, workdir=None) -> str`
+### `upgrade`
+
+```python
+upgrade(
+    manifest=None, to=None, all=False, apply=False,
+    rollback=False, force=False, workdir=None,
+) -> str
+```
 
 Plan, apply, or roll back upgrades, like [`hlock upgrade`](cli.md#upgrade). Returns JSON:
 
@@ -66,7 +81,14 @@ Plan, apply, or roll back upgrades, like [`hlock upgrade`](cli.md#upgrade). Retu
 }
 ```
 
-### `optimize(manifest=None, depth="auto", data="user", harness=None, out=None, strict=False, apply=False, max_trials=None, backend=None, workdir=None) -> str`
+### `optimize`
+
+```python
+optimize(
+    manifest=None, depth="auto", data="user", harness=None, out=None,
+    strict=False, apply=False, max_trials=None, backend=None, workdir=None,
+) -> str
+```
 
 Run the optimizer, like [`hlock optimize`](cli.md#optimize). Returns JSON with `path`
 (the opt-lock written), `summary`, and a `report` with `depth`, `backend`, `data_mode`,

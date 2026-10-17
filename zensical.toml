@@ -34,6 +34,7 @@ nav = [
   { "Reference" = [
     "reference/cli.md",
     "reference/python-api.md",
+    "reference/rust-api.md",
     "reference/manifest.md",
     "reference/lockfile.md",
     "reference/environment.md",

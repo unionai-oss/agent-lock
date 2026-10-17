@@ -72,7 +72,7 @@ cargo add hlock               # or: cargo add harness-lock
 ```
 
 Both crates re-export [`harness-lock-core`](https://crates.io/crates/harness-lock-core).
-API docs are on [docs.rs](https://docs.rs/harness-lock-core).
+See the [Rust API](../reference/rust-api.md) reference for an example and the key types.
 
 ## Build from source
 

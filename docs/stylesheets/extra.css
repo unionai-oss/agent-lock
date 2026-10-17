@@ -68,3 +68,86 @@
 @media (prefers-reduced-motion: reduce) {
   .md-footer-meta, .md-footer-meta::before { animation: none; }
 }
+
+/* Home page hero: tagline, lead, call-to-action buttons, compact install command. */
+.md-typeset .hl-tagline {
+  margin: -.4em 0 .6em;
+  text-align: center;
+  font-size: 1.15rem;
+  font-weight: 700;
+  background: linear-gradient(90deg, #a78bfa, #f472b6);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.md-typeset .hl-lead {
+  max-width: 34rem;
+  margin: 0 auto;
+  text-align: center;
+  color: var(--md-default-fg-color--light);
+}
+.md-typeset .hl-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: .75rem;
+  margin: 1.6em 0 1.2em;
+}
+.md-typeset .hl-actions p {
+  display: contents;
+}
+.md-typeset .md-button.hl-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .45em;
+  margin: 0;
+  padding: .55em 1.3em;
+  border-radius: .7rem;
+  font-weight: 600;
+  transition: transform .15s ease, box-shadow .2s ease, background-position .4s ease,
+              border-color .2s ease, color .2s ease;
+}
+.md-typeset .md-button.hl-btn .twemoji svg {
+  width: 1.05em;
+  height: 1.05em;
+}
+.md-typeset .md-button.hl-btn--primary {
+  border: 0;
+  color: #fff;
+  background: linear-gradient(110deg, #7c3aed, #a855f7 45%, #ec4899);
+  background-size: 160% 100%;
+  box-shadow: 0 .4rem 1.4rem -.5rem rgba(236, 72, 153, .6);
+}
+.md-typeset .md-button.hl-btn--primary:hover,
+.md-typeset .md-button.hl-btn--primary:focus {
+  color: #fff;
+  background-position: 100% 0;
+  transform: translateY(-1px);
+  box-shadow: 0 .6rem 1.8rem -.5rem rgba(236, 72, 153, .75);
+}
+.md-typeset .md-button.hl-btn--primary .twemoji {
+  transition: transform .2s ease;
+}
+.md-typeset .md-button.hl-btn--primary:hover .twemoji {
+  transform: translateX(3px);
+}
+.md-typeset .md-button.hl-btn--ghost {
+  color: var(--md-default-fg-color);
+  background: transparent;
+  border: 1px solid var(--md-default-fg-color--lighter);
+}
+.md-typeset .md-button.hl-btn--ghost:hover,
+.md-typeset .md-button.hl-btn--ghost:focus {
+  color: var(--md-default-fg-color);
+  background: color-mix(in srgb, #a78bfa 10%, transparent);
+  border-color: #a78bfa;
+  transform: translateY(-1px);
+}
+.md-typeset .hl-install {
+  max-width: 28rem;
+  margin: 0 auto 1.6em;
+}
+@media (prefers-reduced-motion: reduce) {
+  .md-typeset .md-button.hl-btn,
+  .md-typeset .md-button.hl-btn .twemoji { transition: none; }
+}

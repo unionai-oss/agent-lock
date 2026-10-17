@@ -9,19 +9,49 @@ description: Make your agent harness setup pinnable and portable. Tune your agen
 
 # hlock { style="text-align: center" }
 
-<p align="center"><strong>Make your agent harness setup pinnable and portable.</strong></p>
+<p class="hl-tagline">Make your agent harness setup pinnable and portable.</p>
 
 `hlock` tunes your agent stack against your own tasks, then pins the winner in a
 `harness.lock`: a pinned, hashed, version-controlled description of the agent that
 works for your domain, plus the evidence for choosing it. Commit the lock, and the
 same setup comes back on any machine, in CI, or on a cluster.
+{ .hl-lead }
 
-[Get started](getting-started/quickstart.md){ .md-button .md-button--primary }
-[View on GitHub](https://github.com/unionai-oss/hlock){ .md-button }
+<div class="hl-actions" markdown>
 
-```bash
-pip install hlock
-```
+[Get started :lucide-arrow-right:](getting-started/quickstart.md){ .md-button .hl-btn .hl-btn--primary }
+[:fontawesome-brands-github: GitHub](https://github.com/unionai-oss/hlock){ .md-button .hl-btn .hl-btn--ghost }
+
+</div>
+
+<div class="hl-install" markdown>
+
+=== "pip"
+
+    ```bash
+    pip install hlock
+    ```
+
+=== "uv"
+
+    ```bash
+    uv add hlock            # add to a project
+    uv tool install hlock   # or install the CLI globally
+    ```
+
+=== "uvx (no install)"
+
+    ```bash
+    uvx hlock --help
+    ```
+
+=== "pipx"
+
+    ```bash
+    pipx install hlock
+    ```
+
+</div>
 
 <figure markdown="span">
   ![An hlock session: init, resolve, check, and run](assets/quickstart.svg){ width="620" }
